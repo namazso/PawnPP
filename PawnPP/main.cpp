@@ -1,8 +1,9 @@
-#include <iostream>
+#include <cstdio>
 #include <fstream>
+
 #define LITTLE_ENDIAN 1
-#include "amx.h"
-#include "amx_loader.h"
+#include "../amx.h"
+#include "../amx_loader.h"
 
 using amx32 = amx<uint32_t, 5>;
 using amx32_loader = amx_loader<amx32>;
