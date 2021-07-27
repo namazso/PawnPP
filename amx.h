@@ -833,7 +833,7 @@ typename amx<Cell, PageIndexBits>::error amx<Cell, PageIndexBits>::step()
 
   case OP_MOVS:
     OPERAND();
-    for (cell i = 0; i < operand; ++i)
+    for (cell i = 0; i < operand; i += sizeof(cell))
     {
       DATA(PRI + i);
       cell tmp = RESULT();
@@ -845,7 +845,7 @@ typename amx<Cell, PageIndexBits>::error amx<Cell, PageIndexBits>::step()
   case OP_CMPS:
     OPERAND();
     PRI = 0;
-    for (cell i = 0; PRI == 0 && i < operand; ++i)
+    for (cell i = 0; PRI == 0 && i < operand; i += sizeof(cell))
     {
       DATA(PRI + i);
       cell tmp = RESULT();
@@ -856,7 +856,7 @@ typename amx<Cell, PageIndexBits>::error amx<Cell, PageIndexBits>::step()
 
   case OP_FILL:
     OPERAND();
-    for (cell i = 0; i < operand; ++i)
+    for (cell i = 0; i < operand; i += sizeof(cell))
     {
       DATA(ALT + i);
       RESULT() = PRI;
