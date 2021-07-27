@@ -182,7 +182,7 @@ private:
     const auto pargc = amx.data_v2p(stk);
     if (!pargc)
       return amx_error::access_violation;
-    return _natives[index](&amx, this, _callback_user_data, *pargc, stk + 1, pri);
+    return _natives[index](&amx, this, _callback_user_data, (*pargc / sizeof(cell)), stk + sizeof(cell), pri);
   }
 
   static amx_error amx_callback_wrapper(amx_t*, void* user_data, cell index, cell stk, cell& pri)
