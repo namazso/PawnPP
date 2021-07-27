@@ -2,10 +2,15 @@
 
 native opaque(v);
 
+// const highest_set = ~((~0) >>> 1);
+// we have to do this runtime due to compiler bug: https://github.com/compuphase/pawn/issues/65
+highest_set()
+    return ~((~opaque(0)) >>> opaque(1));
+
 forward test_Arithmetic();
 public test_Arithmetic() {
     if (1 + opaque(2) != opaque(3)) return 0;
-    if (0x80000000 + opaque(0x80000001) != opaque(1)) return 0;
+    if (highest_set() + opaque(highest_set() | 1) != opaque(1)) return 0;
     if (4 - opaque(1) != opaque(3)) return 0;
     if (1 - opaque(4) != opaque(-3)) return 0;
     if (5 & opaque(3) != opaque(1)) return 0;
@@ -19,7 +24,7 @@ public test_Arithmetic() {
     if (opaque(1) << opaque(1) != opaque(2)) return 0;
     if (opaque(2) >> opaque(1) != opaque(1)) return 0;
     if (~opaque(0) >> opaque(1) != ~opaque(0)) return 0;
-    if (~opaque(0) >>> opaque(1) != ~0x80000000) return 0;
+    if (~opaque(0) >>> opaque(1) != ~highest_set()) return 0;
     if (opaque(2) * opaque(3) != opaque(6)) return 0;
     if (opaque(-2) * opaque(3) != opaque(-6)) return 0;
     if (opaque(-2) * opaque(-3) != opaque(6)) return 0;

@@ -52,7 +52,7 @@ protected:
   };
   
   void SetUp() override {
-    const auto file = readall("F:\\Users\\user\\git\\PawnPP\\Test\\test32.amx");
+    const auto file = readall("test.amx");
     _ldr.init(file.data(), file.size(), CALLBACKS);
   }
 
