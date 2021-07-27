@@ -5,6 +5,8 @@ VisualStudioVersion = 16.0.31402.337
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PawnPP", "PawnPP\PawnPP.vcxproj", "{D188BFCE-F65A-4F2C-B97E-7C7A568ADFEE}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test", "Test\Test.vcxproj", "{8EAA84E8-AFD6-464B-9226-DBA2E0B26933}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,14 @@ Global
 		{D188BFCE-F65A-4F2C-B97E-7C7A568ADFEE}.Release|x64.Build.0 = Release|x64
 		{D188BFCE-F65A-4F2C-B97E-7C7A568ADFEE}.Release|x86.ActiveCfg = Release|Win32
 		{D188BFCE-F65A-4F2C-B97E-7C7A568ADFEE}.Release|x86.Build.0 = Release|Win32
+		{8EAA84E8-AFD6-464B-9226-DBA2E0B26933}.Debug|x64.ActiveCfg = Debug|x64
+		{8EAA84E8-AFD6-464B-9226-DBA2E0B26933}.Debug|x64.Build.0 = Debug|x64
+		{8EAA84E8-AFD6-464B-9226-DBA2E0B26933}.Debug|x86.ActiveCfg = Debug|Win32
+		{8EAA84E8-AFD6-464B-9226-DBA2E0B26933}.Debug|x86.Build.0 = Debug|Win32
+		{8EAA84E8-AFD6-464B-9226-DBA2E0B26933}.Release|x64.ActiveCfg = Release|x64
+		{8EAA84E8-AFD6-464B-9226-DBA2E0B26933}.Release|x64.Build.0 = Release|x64
+		{8EAA84E8-AFD6-464B-9226-DBA2E0B26933}.Release|x86.ActiveCfg = Release|Win32
+		{8EAA84E8-AFD6-464B-9226-DBA2E0B26933}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
