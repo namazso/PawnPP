@@ -329,7 +329,8 @@ public:
     STK += sizeof(cell);
   }
 
-  error call(cell cip, cell& pri)
+private:
+  error call_raw(cell cip, cell& pri)
   {
     // As of version 2.0, the PAWN compiler puts a HALT opcode at the start of the code (so at code address 0). Before
     // jumping to the entry point (a function), the abstract machine pushes a zero return address onto the stack. When
@@ -347,8 +348,9 @@ public:
     pri = PRI;
     return result;
   }
-  
-  error call(cell cip, cell& pri, std::initializer_list<cell> args)
+
+public:
+  error call(cell cip, cell& pri, std::initializer_list<cell> args = {})
   {
     cell size{};
     for (const auto arg : args)
@@ -363,7 +365,7 @@ public:
     if (result != error::success)
       return result;
 
-    return call(cip, pri);
+    return call_raw(cip, pri);
   }
 
   amx(
