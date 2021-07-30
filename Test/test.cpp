@@ -7,8 +7,8 @@
 #include "../amx.h"
 #include "../amx_loader.h"
 
-using amx32 = amx<uint32_t, 5>;
-using amx32_loader = amx_loader<amx32>;
+using amx32 = amx::amx<uint32_t, amx::memory_manager_neumann<amx::memory_backing_paged_buffers<5>>>;
+using amx32_loader = amx::loader<amx32>;
 
 static std::vector<uint8_t> readall(const char* path)
 {

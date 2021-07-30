@@ -5,8 +5,8 @@
 #include "../amx.h"
 #include "../amx_loader.h"
 
-using amx32 = amx<uint32_t, 5>;
-using amx32_loader = amx_loader<amx32>;
+using amx32 = amx::amx<uint32_t, amx::memory_manager_neumann<amx::memory_backing_paged_buffers<5>>>;
+using amx32_loader = amx::loader<amx32>;
 
 static amx32::error five(amx32* amx, amx32_loader* loader, void* user, amx32::cell argc, amx32::cell argv, amx32::cell& retval)
 {
@@ -18,17 +18,19 @@ static amx32::error five(amx32* amx, amx32_loader* loader, void* user, amx32::ce
     return amx32::error::callback_abort;
   }
   amx32::cell two{};
-  const auto two_ref = amx->map(&two, 1);
-  if(!two_ref)
+  amx32::cell two_ref{};
+  const auto success = amx->mem.data().map(&two, 1, two_ref);
+  if(!success)
   {
     printf("failed mapping in two!!\n");
     return amx32::error::callback_abort;
   }
   printf("mapped va for two: %X\n", (uint32_t)two_ref);
+  const auto two_ref_segment_relative = two_ref - amx->DAT;
 
   amx32::cell useless{};
-  auto result = amx->call(get_two, useless, { two_ref });
-  amx->unmap(two_ref, 1);
+  auto result = amx->call(get_two, useless, { two_ref_segment_relative });
+  amx->mem.data().unmap(two_ref, 1);
   if (result != amx32::error::success)
   {
     printf("calling get_two failed with %d!!\n", (int)result);
@@ -72,7 +74,7 @@ constexpr static bool OPCODE_HAS_OPERAND[] = {
 
 static amx32::error on_single_step(amx32* amx, amx32_loader* loader, void* user)
 {
-  const auto cip = amx->debug_cip();
+  const auto cip = amx->CIP;
   const auto popcode = amx->code_v2p(cip);
   if (!popcode)
   {
