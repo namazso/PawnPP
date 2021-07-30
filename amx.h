@@ -75,7 +75,7 @@ namespace amx
       {
         if (size == 0)
         {
-          va = (~(cell)0) / sizeof(cell) * sizeof(cell); // highest valid address
+          va = ~(cell)(sizeof(cell) - 1); // highest valid address
           return true;
         }
 
