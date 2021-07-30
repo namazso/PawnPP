@@ -368,7 +368,7 @@ namespace amx
       amx.DAT = data_base;
 
       amx.STK = amx.STP = (cell)((_data.size() - 1) * sizeof(cell));
-      amx.HEA = data_oldsize * sizeof(cell);
+      amx.HEA = (cell)(data_oldsize * sizeof(cell));
 
       return error::success;
     }

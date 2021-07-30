@@ -7,6 +7,24 @@ namespace amx
 {
   namespace detail
   {
+    template <typename A, typename B>
+    class max
+    {
+      void _assert()
+      {
+        static_assert(std::numeric_limits<A>::radix == std::numeric_limits<B>::radix);
+      }
+
+      constexpr static auto a_digits = std::numeric_limits<A>::digits;
+      constexpr static auto b_digits = std::numeric_limits<B>::digits;
+
+    public:
+      using type = std::conditional<(a_digits > b_digits), A, B>;
+    };
+
+    template <typename A, typename B>
+    using max_t = typename max<A, B>::type;
+
     template <typename Cell, size_t IndexBits>
     class memory_backing_paged_buffers
     {
