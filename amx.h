@@ -1,6 +1,10 @@
 #pragma once
 #include <cstdint>
 #include <cassert>
+#include <limits>
+#include <type_traits>
+#include <cstddef>
+#include <initializer_list>
 #define AMX_ASSERT(cond) assert(cond)
 
 namespace amx
@@ -23,32 +27,87 @@ namespace amx
     template <typename A, typename B>
     class max
     {
-      void _assert()
-      {
-        static_assert(std::numeric_limits<A>::radix == std::numeric_limits<B>::radix);
-      }
+      static_assert(std::numeric_limits<A>::radix == std::numeric_limits<B>::radix, "radix mismatch");
 
       constexpr static auto a_digits = std::numeric_limits<A>::digits;
       constexpr static auto b_digits = std::numeric_limits<B>::digits;
 
     public:
-      using type = std::conditional<(a_digits > b_digits), A, B>;
+      using type = typename std::conditional<(a_digits > b_digits), A, B>::type;
     };
 
     template <typename A, typename B>
     using max_t = typename max<A, B>::type;
 
+    template <typename A, typename B>
+    class min
+    {
+      static_assert(std::numeric_limits<A>::radix == std::numeric_limits<B>::radix, "radix mismatch");
+
+      constexpr static auto a_digits = std::numeric_limits<A>::digits;
+      constexpr static auto b_digits = std::numeric_limits<B>::digits;
+
+    public:
+      using type = typename std::conditional<(a_digits < b_digits), A, B>::type;
+    };
+
+    template <typename A, typename B>
+    using min_t = typename min<A, B>::type;
+
+    template <typename Cell>
+    struct cell_traits
+    {
+      using ucell = typename std::make_unsigned<Cell>::type;
+      using scell = typename std::make_signed<Cell>::type;
+      using cell = ucell;
+
+      using ushorter = min_t<ucell, uintptr_t>;
+      using sshorter = min_t<scell, intptr_t>;
+      using shorter = ushorter;
+
+      using ulonger = max_t<ucell, uintptr_t>;
+      using slonger = max_t<scell, intptr_t>;
+      using longer = ulonger;
+
+      constexpr static shorter cell_bytes = (shorter)(sizeof(cell));
+      constexpr static shorter cell_bits = (shorter)(std::numeric_limits<cell>::digits);
+
+      constexpr static shorter misalign_mask = cell_bytes - 1;
+      constexpr static longer align_mask = ~(longer)misalign_mask;
+
+      static_assert(cell_bytes * 8 == cell_bits, "only 8 bit bytes are supported");
+      static_assert(cell_bytes == 1 || cell_bytes == 2 || cell_bytes == 4 || cell_bytes == 8, "");
+
+#define DEFINE_CELL_MEMBERS(Cell) \
+  using ucell = typename ::amx::detail::cell_traits<Cell>::ucell;\
+  using scell = typename ::amx::detail::cell_traits<Cell>::scell;\
+  using cell = typename ::amx::detail::cell_traits<Cell>::cell;\
+  using ushorter = typename ::amx::detail::cell_traits<Cell>::ushorter;\
+  using sshorter = typename ::amx::detail::cell_traits<Cell>::sshorter;\
+  using shorter = typename ::amx::detail::cell_traits<Cell>::shorter;\
+  using ulonger = typename ::amx::detail::cell_traits<Cell>::ulonger;\
+  using slonger = typename ::amx::detail::cell_traits<Cell>::slonger;\
+  using longer = typename ::amx::detail::cell_traits<Cell>::longer;\
+  constexpr static auto cell_bytes = ::amx::detail::cell_traits<Cell>::cell_bytes;\
+  constexpr static auto cell_bits = ::amx::detail::cell_traits<Cell>::cell_bits;\
+  constexpr static auto misalign_mask = ::amx::detail::cell_traits<Cell>::misalign_mask;\
+  constexpr static auto align_mask = ::amx::detail::cell_traits<Cell>::align_mask
+
+    };
+
     template <typename Cell, size_t IndexBits>
     class memory_backing_paged_buffers
     {
-      using cell = typename std::make_unsigned<Cell>::type;
-      using scell = typename std::make_signed<cell>::type;
-      constexpr static size_t cell_bits = std::numeric_limits<cell>::digits;
+      DEFINE_CELL_MEMBERS(Cell);
 
-      constexpr static auto index_bits = IndexBits;
-      constexpr static auto offset_bits = cell_bits - index_bits;
+      constexpr static size_t index_bits = IndexBits;
+      constexpr static size_t offset_bits = cell_bits - index_bits;
+
       constexpr static auto page_count = (cell)1 << index_bits;
       constexpr static auto page_size = (cell)1 << offset_bits;
+
+      static_assert(index_bits <= cell_bits, "page bits more than cell bit size!");
+      static_assert(index_bits >= 1, "must use at least 1 bit for index");
 
       struct mapping
       {
@@ -58,21 +117,16 @@ namespace amx
 
       mapping _mappings[page_count]{};
 
-      static void _asserts()
-      {
-        static_assert(index_bits <= cell_bits, "page bits more than cell bit size!");
-        static_assert(index_bits >= 1, "must use at least 1 bit for index");
-      }
-
-      static cell page_index(cell va) { return va >> offset_bits; }
-      static cell page_offset(cell va) { return va & (~(cell)0 << index_bits >> index_bits); }
-      static cell make_va(cell index, cell offset) { return (index << offset_bits) | offset; }
+      static constexpr cell page_index(cell va) { return va >> offset_bits; }
+      static constexpr cell page_offset(cell va) { return va & ((cell)((cell)~(cell)0 << index_bits) >> index_bits); }
+      static constexpr cell make_va(cell index, cell offset) { return (cell)((cell)(index << offset_bits) | offset); }
       mapping* mapping_for_va(cell va) { return &_mappings[page_index(va)]; }
+      const mapping* mapping_for_va(cell va) const { return &_mappings[page_index(va)]; }
 
     public:
-      cell* translate(cell va)
+      cell* translate(cell va) const
       {
-        if (va % sizeof(cell) != 0)
+        if (va % cell_bytes != 0)
           return nullptr;
 
         const auto m = mapping_for_va(va);
@@ -81,18 +135,21 @@ namespace amx
         const auto off = page_offset(va);
         if (off >= m->size)
           return nullptr;
-        return m->buf + off / sizeof(cell);
+        return m->buf + off / cell_bytes;
       }
 
       bool map(cell* buf, size_t size, cell& va)
       {
         if (size == 0)
         {
-          va = ~(cell)(sizeof(cell) - 1); // highest valid address
+          va = ~(cell)misalign_mask; // highest valid address
           return true;
         }
 
-        size *= sizeof(cell);
+        if ((longer)size > (longer)~(cell)0)
+          return false; // mapping bigger than address space
+
+        size *= cell_bytes;
         const auto count = page_index((cell)(size + page_size - 1));
         cell in_a_row = 0;
         cell index = 0;
@@ -114,8 +171,8 @@ namespace amx
       found:
         for (cell i = 0; i < count; ++i)
         {
-          _mappings[index + i].buf = buf + page_size / sizeof(cell) * i;
-          _mappings[index + i].size = size - page_size * i;
+          _mappings[index + i].buf = buf + page_size / (cell)cell_bytes * i;
+          _mappings[index + i].size = size - (size_t)(page_size * i);
         }
 
         va = make_va(index, 0);
@@ -125,7 +182,7 @@ namespace amx
       void unmap(cell va, size_t size)
       {
         const auto m = mapping_for_va(va);
-        size *= sizeof(cell);
+        size *= cell_bytes;
         const auto count = page_index((cell)(size + page_size - 1));
         for (cell i = 0; i < count; ++i)
         {
@@ -135,11 +192,10 @@ namespace amx
       }
     };
 
-
     template <typename Cell>
     class memory_backing_contignous_buffer
     {
-      using cell = typename std::make_unsigned<Cell>::type;
+      DEFINE_CELL_MEMBERS(Cell);
 
       cell* _buf{};
       size_t _size{};
@@ -149,7 +205,7 @@ namespace amx
       {
         if (va >= _size)
           return nullptr;
-        return _buf + (va / sizeof(cell));
+        return _buf + (va / cell_bytes);
       }
 
       bool map(cell* buf, size_t size, cell& va)
@@ -157,7 +213,7 @@ namespace amx
         if (_buf)
           return false;
         _buf = buf;
-        _size = size * sizeof(cell);
+        _size = size * cell_bytes;
         va = 0;
         return true;
       }
@@ -165,7 +221,7 @@ namespace amx
       void unmap(cell va, size_t size)
       {
         AMX_ASSERT(va == 0);
-        AMX_ASSERT(size * sizeof(cell) == _size);
+        AMX_ASSERT(size * cell_bytes == _size);
         _buf = 0;
         _size = 0;
       }
@@ -174,14 +230,12 @@ namespace amx
     template <typename Cell, size_t ValidBits>
     class memory_backing_partial_address_space
     {
-      using cell = typename std::make_unsigned<Cell>::type;
-      using scell = typename std::make_signed<cell>::type;
-      constexpr static size_t cell_bits = std::numeric_limits<cell>::digits;
+      DEFINE_CELL_MEMBERS(Cell);
 
       constexpr static size_t valid_bits = ValidBits;
       constexpr static size_t invalid_bits = cell_bits - valid_bits;
       constexpr static cell offset_mask = (((~(cell)0) << invalid_bits) >> invalid_bits);
-      constexpr static cell offset_mask_align = offset_mask & ~(cell)(sizeof(cell) - 1);
+      constexpr static cell offset_mask_align = offset_mask & ~(cell)misalign_mask;
 
       uintptr_t _backing_bits{};
 
@@ -199,11 +253,13 @@ namespace amx
 
       bool map(cell* buf, size_t size, cell& va)
       {
+        va = 0;
+
         if (_backing_bits)
           return false;
 
         AMX_ASSERT(((uintptr_t)buf & offset_mask) == 0);
-        AMX_ASSERT(size * sizeof(cell) > offset_mask);
+        AMX_ASSERT(size * cell_bytes > offset_mask);
 
         _backing_bits = (uintptr_t)buf & offset_mask_align;
         return true;
@@ -281,9 +337,7 @@ namespace amx
   public:
     constexpr static uint32_t version = 11;
 
-    using cell = typename std::make_unsigned<Cell>::type;
-    using scell = typename std::make_signed<cell>::type;
-    constexpr static size_t cell_bits = std::numeric_limits<cell>::digits;
+    DEFINE_CELL_MEMBERS(Cell);
 
     using memory_manager_t = typename MemoryManager::template type<cell>;
 
@@ -347,7 +401,7 @@ namespace amx
   public:
     error push(cell v)
     {
-      STK -= sizeof(cell);
+      STK -= cell_bytes;
       const auto target = data_v2p(STK);
       if (!target)
         return error::access_violation;
@@ -361,13 +415,13 @@ namespace amx
       if (!target)
         return error::access_violation;
       v = *target;
-      STK += sizeof(cell);
+      STK += cell_bytes;
       return error::success;
     }
 
     void pop()
     {
-      STK += sizeof(cell);
+      STK += cell_bytes;
     }
 
   private:
@@ -399,7 +453,7 @@ namespace amx
         const auto result = push(arg);
         if (result != error::success)
           return result;
-        size += sizeof(cell);
+        size += cell_bytes;
       }
 
       const auto result = push(size);
@@ -523,10 +577,10 @@ namespace amx
 
     cell* _tmp{};
 
-    const static auto INC = [](cell& v) -> cell& { return (v += sizeof(cell)); };
-    const static auto DEC = [](cell& v) -> cell& { return (v -= sizeof(cell)); };
-    const static auto INCP = [](cell& v) -> cell { cell c = v; return (v += sizeof(cell)), c; };
-    const static auto DECP = [](cell& v) -> cell { cell c = v; return (v -= sizeof(cell)), c; };
+    const static auto INC = [](cell& v) -> cell& { return (v += cell_bytes); };
+    const static auto DEC = [](cell& v) -> cell& { return (v -= cell_bytes); };
+    const static auto INCP = [](cell& v) -> cell { cell c = v; return (v += cell_bytes), c; };
+    const static auto DECP = [](cell& v) -> cell { cell c = v; return (v -= cell_bytes), c; };
 
     _tmp = code_v2p(INCP(CIP));
     if (!_tmp)
@@ -603,29 +657,29 @@ namespace amx
 
     case OP_LODB_I:
       OPERAND();
-    {
-      constexpr static auto subcell_mask = (cell)(sizeof(cell) - 1);
-      const auto aligned = PRI & ~subcell_mask;
-      const auto subcell_bits = (PRI & subcell_mask) * 8;
-      if (aligned != ((PRI + operand - 1) & ~subcell_mask))
-        return error::invalid_operand; // access spans across cells
-      DATA(aligned);
-      switch (operand)
       {
-      case 1:
-        PRI = (RESULT() >> subcell_bits) & 0xFF;
+        constexpr static auto subcell_mask = (cell)misalign_mask;
+        const auto aligned = (cell)(PRI & ~subcell_mask);
+        const auto subcell_bits = (cell)((PRI & subcell_mask) * 8);
+        if (aligned != ((PRI + operand - 1) & ~subcell_mask))
+          return error::invalid_operand; // access spans across cells
+        DATA(aligned);
+        switch (operand)
+        {
+        case 1:
+          PRI = (RESULT() >> subcell_bits) & 0xFF;
+          break;
+        case 2:
+          PRI = (RESULT() >> subcell_bits) & 0xFFFF;
+          break;
+        case 4:
+          PRI = (RESULT() >> subcell_bits) & 0xFFFFFFFF;
+          break;
+        default:
+          return error::invalid_operand;
+        }
         break;
-      case 2:
-        PRI = (RESULT() >> subcell_bits) & 0xFFFF;
-        break;
-      case 4:
-        PRI = (RESULT() >> subcell_bits) & 0xFFFFFFFF;
-        break;
-      default:
-        return error::invalid_operand;
       }
-      break;
-    }
 
     case OP_CONST_PRI:
       OPERAND();
@@ -671,34 +725,34 @@ namespace amx
 
     case OP_STRB_I:
       OPERAND();
-    {
-      constexpr static auto subcell_mask = (cell)(sizeof(cell) - 1);
-      const auto aligned = ALT & ~subcell_mask;
-      const auto subcell_bits = (ALT & subcell_mask) * 8;
-      if (aligned != ((ALT + operand - 1) & ~subcell_mask))
-        return error::invalid_operand; // access spans across cells
-      DATA(aligned);
-      switch (operand)
       {
-      case 1:
-        RESULT() = (RESULT() & ~((cell)0xFF << subcell_bits)) | ((PRI & 0xFF) << subcell_bits);
+        constexpr static auto subcell_mask = (cell)misalign_mask;
+        const auto aligned = (cell)(ALT & ~subcell_mask);
+        const auto subcell_bits = (cell)((ALT & subcell_mask) * 8);
+        if (aligned != ((ALT + operand - 1) & ~subcell_mask))
+          return error::invalid_operand; // access spans across cells
+        DATA(aligned);
+        switch (operand)
+        {
+        case 1:
+          RESULT() = (cell)((RESULT() & ~((cell)0xFF << subcell_bits)) | ((PRI & 0xFF) << subcell_bits));
+          break;
+        case 2:
+          RESULT() = (cell)((RESULT() & ~((cell)0xFFFF << subcell_bits)) | ((PRI & 0xFFFF) << subcell_bits));
+          break;
+        case 4:
+          RESULT() = (cell)((RESULT() & ~((cell)0xFFFFFFFF << subcell_bits)) | ((PRI & 0xFFFFFFFF) << subcell_bits));
+          break;
+        default:
+          return error::invalid_operand;
+        }
         break;
-      case 2:
-        RESULT() = (RESULT() & ~((cell)0xFFFF << subcell_bits)) | ((PRI & 0xFFFF) << subcell_bits);
-        break;
-      case 4:
-        RESULT() = (RESULT() & ~((cell)0xFFFFFFFF << subcell_bits)) | ((PRI & 0xFFFFFFFF) << subcell_bits);
-        break;
-      default:
-        return error::invalid_operand;
       }
-      break;
-    }
 
     case OP_ALIGN_PRI:
       OPERAND();
-      if (operand < sizeof(cell))
-        PRI ^= (cell)(sizeof(cell) - operand);
+      if (operand < cell_bytes)
+        PRI ^= (cell)(cell_bytes - operand);
       break;
 
     case OP_LCTRL:
@@ -808,30 +862,30 @@ namespace amx
       POP(FRM);
       POP(CIP);
       DATA(STK);
-      STK += RESULT() + sizeof(cell);
+      STK += RESULT() + cell_bytes;
       break;
 
     case OP_CALL:
       OPERAND();
       PUSH(CIP);
-      CIP = CIP - 2 * sizeof(cell) + operand;
+      CIP = CIP - 2 * cell_bytes + operand;
       break;
 
     case OP_JUMP:
       OPERAND();
-      CIP = CIP - 2 * sizeof(cell) + operand;
+      CIP = CIP - 2 * cell_bytes + operand;
       break;
 
     case OP_JZER:
       OPERAND();
       if (PRI == 0)
-        CIP = CIP - 2 * sizeof(cell) + operand;
+        CIP = CIP - 2 * cell_bytes + operand;
       break;
 
     case OP_JNZ:
       OPERAND();
       if (PRI != 0)
-        CIP = CIP - 2 * sizeof(cell) + operand;
+        CIP = CIP - 2 * cell_bytes + operand;
       break;
 
     case OP_SHL:
@@ -843,7 +897,7 @@ namespace amx
       break;
 
     case OP_SSHR:
-      PRI = (cell)((scell)PRI >> ALT); // not UB since C++20. and before every compiler implements it sanely anyways
+      PRI = (cell)((scell)PRI >> ALT); // not implementation defined since C++20.
       break;
 
     case OP_SHL_C_PRI:
@@ -954,7 +1008,7 @@ namespace amx
 
     case OP_MOVS:
       OPERAND();
-      for (cell i = 0; i < operand; i += sizeof(cell))
+      for (cell i = 0; i < operand; i += cell_bytes)
       {
         DATA(PRI + i);
         cell tmp = RESULT();
@@ -966,7 +1020,7 @@ namespace amx
     case OP_CMPS:
       OPERAND();
       PRI = 0;
-      for (cell i = 0; PRI == 0 && i < operand; i += sizeof(cell))
+      for (cell i = 0; PRI == 0 && i < operand; i += cell_bytes)
       {
         DATA(PRI + i);
         cell tmp = RESULT();
@@ -977,7 +1031,7 @@ namespace amx
 
     case OP_FILL:
       OPERAND();
-      for (cell i = 0; i < operand; i += sizeof(cell))
+      for (cell i = 0; i < operand; i += cell_bytes)
       {
         DATA(ALT + i);
         RESULT() = PRI;
@@ -1007,14 +1061,14 @@ namespace amx
     case OP_SWITCH:
       OPERAND();
       {
-        cell casetbl = CIP - 2 * sizeof(cell) + operand;
+        cell casetbl = CIP - 2 * cell_bytes + operand;
         CODEDATA(INCP(casetbl));
         if (RESULT() != OP_CASETBL)
           return error::invalid_operand;
         CODEDATA(INCP(casetbl));
         cell record_count = RESULT();
         CODEDATA(INCP(casetbl));
-        CIP = casetbl - sizeof(cell) + RESULT(); // no match cip
+        CIP = casetbl - cell_bytes + RESULT(); // no match cip
         while (record_count)
         {
           CODEDATA(INCP(casetbl));
@@ -1023,7 +1077,7 @@ namespace amx
           cell match_cip = RESULT();
           if (PRI == test_val)
           {
-            CIP = casetbl - sizeof(cell) + match_cip;
+            CIP = casetbl - cell_bytes + match_cip;
             break;
           }
           --record_count;
@@ -1067,3 +1121,4 @@ namespace amx
     return error::success;
   }
 }
+

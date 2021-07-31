@@ -112,7 +112,7 @@ namespace amx
     constexpr static uint16_t expected_magic =
       cell_bits == 32 ? 0xF1E0 :
       cell_bits == 64 ? 0xF1E1 :
-      // cell_bits == 16 ? 0xF1E2 : // 16 bit unsupported for now
+      cell_bits == 16 ? 0xF1E2 :
       0;
 
     enum : uint32_t

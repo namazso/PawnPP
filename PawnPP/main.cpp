@@ -2,6 +2,8 @@
 #include <fstream>
 
 #define LITTLE_ENDIAN 1
+#include <cinttypes>
+
 #include "../amx.h"
 #include "../amx_loader.h"
 
@@ -26,7 +28,7 @@ static amx::error five(amx32* amx, amx32_loader* loader, void* user, amx32::cell
     return amx::error::callback_abort;
   }
   printf("mapped va for two: %X\n", (uint32_t)two_ref);
-  const auto two_ref_segment_relative = two_ref - amx->DAT;
+  const auto two_ref_segment_relative = (amx32::cell)(two_ref - amx->DAT);
 
   amx32::cell useless{};
   auto result = amx->call(get_two, useless, { two_ref_segment_relative });
@@ -72,6 +74,18 @@ constexpr static bool OPCODE_HAS_OPERAND[] = {
   1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0
 };
 
+constexpr static const char* FORMAT_BY_SIZE[] = {
+  nullptr,
+  "%" SCNd8,
+  "%" SCNd16,
+  nullptr,
+  "%" SCNd32,
+  nullptr,
+  nullptr,
+  nullptr,
+  "%" SCNd64
+};
+
 static amx::error on_single_step(amx32* amx, amx32_loader* loader, void* user)
 {
   const auto cip = amx->CIP;
@@ -90,7 +104,7 @@ static amx::error on_single_step(amx32* amx, amx32_loader* loader, void* user)
     if (!poperand)
       printf("*INVALID*");
     else
-      printf("%d", *poperand);
+      printf(FORMAT_BY_SIZE[sizeof(*poperand)], *poperand);
   }
   printf("\n");
 
@@ -159,6 +173,7 @@ int main(int argc, char** argv)
     return -4;
   }
 
-  printf("main() returned: %d", retval);
+  printf("main() returned: ");
+  printf(FORMAT_BY_SIZE[sizeof(retval)], retval);
   return 0;
 }

@@ -59,12 +59,12 @@ protected:
   }
 };
 
-//using Amx16Test = AmxTest<uint16_t>;
+using Amx16Test = AmxTest<uint16_t>;
 using Amx32Test = AmxTest<uint32_t>;
 using Amx64Test = AmxTest<uint64_t>;
 
 #define TEST_PAWN(name, expected_result, expected_retval) \
-  /*TEST_F(Amx16Test, name) {\
+  TEST_F(Amx16Test, name) {\
     const auto fn = _ldr.get_public("test_" #name);\
     EXPECT_NE(fn, 0);\
     my_amx::cell retval{(my_amx::cell)0xCCCCCCCCCCCCCCCC};\
@@ -72,7 +72,7 @@ using Amx64Test = AmxTest<uint64_t>;
     EXPECT_EQ(result, expected_result);\
     if (result == amx::error::success)\
       EXPECT_EQ(retval, expected_retval);\
-  }*/\
+  }\
   TEST_F(Amx32Test, name) {\
     const auto fn = _ldr.get_public("test_" #name);\
     EXPECT_NE(fn, 0);\
