@@ -603,22 +603,29 @@ namespace amx
 
     case OP_LODB_I:
       OPERAND();
-      DATA(PRI);
+    {
+      constexpr static auto subcell_mask = (cell)(sizeof(cell) - 1);
+      const auto aligned = PRI & ~subcell_mask;
+      const auto subcell_bits = (PRI & subcell_mask) * 8;
+      if (aligned != ((PRI + operand - 1) & ~subcell_mask))
+        return error::invalid_operand; // access spans across cells
+      DATA(aligned);
       switch (operand)
       {
       case 1:
-        PRI = RESULT() & 0xFF;
+        PRI = (RESULT() >> subcell_bits) & 0xFF;
         break;
       case 2:
-        PRI = RESULT() & 0xFFFF;
+        PRI = (RESULT() >> subcell_bits) & 0xFFFF;
         break;
       case 4:
-        PRI = RESULT() & 0xFFFFFFFF;
+        PRI = (RESULT() >> subcell_bits) & 0xFFFFFFFF;
         break;
       default:
         return error::invalid_operand;
       }
       break;
+    }
 
     case OP_CONST_PRI:
       OPERAND();
@@ -664,25 +671,34 @@ namespace amx
 
     case OP_STRB_I:
       OPERAND();
-      DATA(ALT);
+    {
+      constexpr static auto subcell_mask = (cell)(sizeof(cell) - 1);
+      const auto aligned = ALT & ~subcell_mask;
+      const auto subcell_bits = (ALT & subcell_mask) * 8;
+      if (aligned != ((ALT + operand - 1) & ~subcell_mask))
+        return error::invalid_operand; // access spans across cells
+      DATA(aligned);
       switch (operand)
       {
       case 1:
-        RESULT() = (RESULT() & ~(cell)0xFF) | (PRI & 0xFF);
+        RESULT() = (RESULT() & ~((cell)0xFF << subcell_bits)) | ((PRI & 0xFF) << subcell_bits);
         break;
       case 2:
-        RESULT() = (RESULT() & ~(cell)0xFFFF) | (PRI & 0xFFFF);
+        RESULT() = (RESULT() & ~((cell)0xFFFF << subcell_bits)) | ((PRI & 0xFFFF) << subcell_bits);
         break;
       case 4:
-        RESULT() = (RESULT() & ~(cell)0xFFFFFFFF) | (PRI & 0xFFFFFFFF);
+        RESULT() = (RESULT() & ~((cell)0xFFFFFFFF << subcell_bits)) | ((PRI & 0xFFFFFFFF) << subcell_bits);
         break;
       default:
         return error::invalid_operand;
       }
       break;
+    }
 
     case OP_ALIGN_PRI:
-      // what the fuck does this mean? probably not important since its not implemented for big endian
+      OPERAND();
+      if (operand < sizeof(cell))
+        PRI ^= (cell)(sizeof(cell) - operand);
       break;
 
     case OP_LCTRL:
