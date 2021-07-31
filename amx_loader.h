@@ -241,7 +241,7 @@ namespace amx
         return loader_error::unsupported_file_version;
       if (amx_version > amx_t::version)
         return loader_error::unsupported_amx_version;
-      if (flags & flag_overlay || flags & flag_nochecks || flags & flag_sleep)
+      if (flags & flag_overlay || flags & flag_sleep)
         return loader_error::feature_not_supported;
       if (defsize < 8)
         return loader_error::invalid_file;
