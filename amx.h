@@ -204,7 +204,7 @@ namespace amx
     };
 
     template <typename CodeBacking, typename DataBacking>
-    class memory_manager_harward
+    class memory_manager_harvard
     {
       CodeBacking _code;
       DataBacking _data;
@@ -246,10 +246,10 @@ namespace amx
   };
 
   template <typename CodeBacking, typename DataBacking>
-  struct memory_manager_harward
+  struct memory_manager_harvard
   {
     template <typename Cell>
-    using type = detail::memory_manager_harward<
+    using type = detail::memory_manager_harvard<
       typename CodeBacking::template type<Cell>,
       typename DataBacking::template type<Cell>
     >;
