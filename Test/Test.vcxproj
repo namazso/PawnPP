@@ -37,7 +37,13 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
-    <CopyFileToFolders Include="test.amx">
+    <CopyFileToFolders Include="test16.amx">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="test32.amx">
+      <FileType>Document</FileType>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="test64.amx">
       <FileType>Document</FileType>
     </CopyFileToFolders>
   </ItemGroup>

@@ -268,3 +268,63 @@ forward test_VarArgs();
 public test_VarArgs() {
     return vararg(1, 2, 3, 4, 5);
 }
+
+r() {
+	static a = 4, b = 0;
+	a += 2;
+	b += 3;
+	if (a == b)
+		return a;
+	return 0;
+}
+
+forward test_Statics();
+public test_Statics() {
+	new a = 0;
+	while (!a)
+		a = r();
+	return a;
+}
+
+toupper_(v)
+    return v >= 'a' && v <= 'z' ? v - 'a' + 'A' : v;
+
+forward test_Packed();
+public test_Packed() {
+    new str{} = "test string 123";
+    for (new i = 0; i < sizeof(str) * (cellbits / charbits); ++i)
+        str{i} = toupper_(str{i});
+    static teststr[] = ''TEST STRING 123'';
+    new is_ok = 1;
+    for (new i = 0; i < sizeof(teststr); ++i)
+        is_ok &= _:!!(str{i} == teststr[i]);
+	return is_ok;
+}
+
+fuzzy(a, b) {
+    new ctr = 0;
+label:
+    ++ctr;
+    new tmp = 1 << b;
+    a |= tmp;
+    --b;
+    if (b)
+        goto label;
+    return a + ctr;
+}
+
+forward test_GotoStackFixup();
+public test_GotoStackFixup() {
+    return fuzzy(1234, 11) ;
+}
+
+forward test_Bounds();
+public test_Bounds() {
+    new numbers[] = [1, 2, 3];
+    new count = opaque(sizeof(numbers));
+    new sum = 0;
+    for (new i = 0; i < count; ++i)
+        sum += numbers[i];
+    return sum;
+}
+
