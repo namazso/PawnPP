@@ -6,6 +6,18 @@
 
 namespace amx
 {
+  enum class loader_error
+  {
+    success,
+    invalid_file,
+    unsupported_file_version,
+    unsupported_amx_version,
+    feature_not_supported,
+    wrong_cell_size,
+    native_not_resolved,
+    unknown
+  };
+
   namespace detail
   {
     template <typename T>
@@ -91,7 +103,6 @@ namespace amx
   {
   public:
     using amx_t = Amx;
-    using amx_error = typename amx_t::error;
 
     using cell = typename amx_t::cell;
     using scell = typename amx_t::scell;
@@ -118,22 +129,10 @@ namespace amx
 
   public:
     amx_t amx{ &amx_callback_wrapper, this };
-
-    enum class error
-    {
-      success,
-      invalid_file,
-      unsupported_file_version,
-      unsupported_amx_version,
-      feature_not_supported,
-      wrong_cell_size,
-      native_not_resolved,
-      unknown
-    };
-
-    using native_fn = amx_error(*)(amx_t* amx, loader* loader, void* user, cell argc, cell argv, cell& retval);
-    using single_step_fn = amx_error(*)(amx_t* amx, loader* loader, void* user);
-    using break_fn = amx_error(*)(amx_t* amx, loader* loader, void* user);
+    
+    using native_fn = error(*)(amx_t* amx, loader* loader, void* user, cell argc, cell argv, cell& retval);
+    using single_step_fn = error(*)(amx_t* amx, loader* loader, void* user);
+    using break_fn = error(*)(amx_t* amx, loader* loader, void* user);
 
     struct native_arg
     {
@@ -174,27 +173,27 @@ namespace amx
     cell get_main() { return _main; }
 
   private:
-    amx_error amx_callback(cell index, cell stk, cell& pri)
+    error amx_callback(cell index, cell stk, cell& pri)
     {
       if (index == amx_t::cbid_single_step)
-        return _on_single_step ? _on_single_step(&amx, this, _callback_user_data) : amx_error::success;
+        return _on_single_step ? _on_single_step(&amx, this, _callback_user_data) : error::success;
       if (index == amx_t::cbid_break)
-        return _on_break ? _on_break(&amx, this, _callback_user_data) : amx_error::success;
+        return _on_break ? _on_break(&amx, this, _callback_user_data) : error::success;
       if (index > _natives.size())
-        return amx_error::invalid_operand;
+        return error::invalid_operand;
       const auto pargc = amx.data_v2p(stk);
       if (!pargc)
-        return amx_error::access_violation;
+        return error::access_violation;
       return _natives[index](&amx, this, _callback_user_data, (*pargc / sizeof(cell)), stk + sizeof(cell), pri);
     }
 
-    static amx_error amx_callback_wrapper(amx_t*, void* user_data, cell index, cell stk, cell& pri)
+    static error amx_callback_wrapper(amx_t*, void* user_data, cell index, cell stk, cell& pri)
     {
       return ((loader*)user_data)->amx_callback(index, stk, pri);
     }
 
   public:
-    error init(const uint8_t* buf, size_t buf_size, const callbacks_arg& callbacks)
+    loader_error init(const uint8_t* buf, size_t buf_size, const callbacks_arg& callbacks)
     {
       static_assert(expected_magic != 0, "unsupported cell size");
       using namespace detail;
@@ -204,7 +203,7 @@ namespace amx
       _callback_user_data = callbacks.user_data;
 
       if (buf_size < 60)
-        return error::invalid_file;
+        return loader_error::invalid_file;
 
       const auto size = read_le<uint32_t>(buf);
       const auto magic = read_le<uint16_t>(buf + 4);
@@ -231,30 +230,30 @@ namespace amx
         case 0xF1E0:
         case 0xF1E1:
         case 0xF1E2:
-          return error::wrong_cell_size;
+          return loader_error::wrong_cell_size;
         default:
-          return error::invalid_file;
+          return loader_error::invalid_file;
         }
       }
       if (size > buf_size)
-        return error::invalid_file;
+        return loader_error::invalid_file;
       if (file_version != 11)
-        return error::unsupported_file_version;
+        return loader_error::unsupported_file_version;
       if (amx_version > amx_t::version)
-        return error::unsupported_amx_version;
+        return loader_error::unsupported_amx_version;
       if (flags & flag_overlay || flags & flag_nochecks || flags & flag_sleep)
-        return error::feature_not_supported;
+        return loader_error::feature_not_supported;
       if (defsize < 8)
-        return error::invalid_file;
+        return loader_error::invalid_file;
 
       if (!select_array(buf, buf_size, cod, dat, _code))
-        return error::invalid_file;
+        return loader_error::invalid_file;
 
       for (auto& c : _code)
         c = from_le(c);
 
       if (!select_array(buf, buf_size, dat, hea, _data))
-        return error::invalid_file;
+        return loader_error::invalid_file;
 
       for (auto& c : _data)
         c = from_le(c);
@@ -288,7 +287,7 @@ namespace amx
       );
 
       if (!success)
-        return error::invalid_file;
+        return loader_error::invalid_file;
 
       bool native_not_found = false;
       success = iter_valarray(
@@ -324,10 +323,10 @@ namespace amx
       );
 
       if (!success)
-        return native_not_found ? error::native_not_resolved : error::invalid_file;
+        return native_not_found ? loader_error::native_not_resolved : loader_error::invalid_file;
 
       if (libraries != pubvars)
-        return error::feature_not_supported;
+        return loader_error::feature_not_supported;
 
       success = iter_valarray(
         buf,
@@ -352,17 +351,17 @@ namespace amx
       );
 
       if (!success)
-        return error::invalid_file;
+        return loader_error::invalid_file;
 
       cell code_base{};
       bool result = amx.mem.code().map(_code.data(), _code.size(), code_base);
       if (!result)
-        return error::unknown;
+        return loader_error::unknown;
 
       cell data_base{};
       result = amx.mem.data().map(_data.data(), _data.size(), data_base);
       if (!result)
-        return error::unknown;
+        return loader_error::unknown;
 
       amx.COD = code_base;
       amx.DAT = data_base;
@@ -370,7 +369,7 @@ namespace amx
       amx.STK = amx.STP = (cell)((_data.size() - 1) * sizeof(cell));
       amx.HEA = (cell)(data_oldsize * sizeof(cell));
 
-      return error::success;
+      return loader_error::success;
     }
 
     loader() = default;

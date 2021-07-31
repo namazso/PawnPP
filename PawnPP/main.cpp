@@ -5,17 +5,17 @@
 #include "../amx.h"
 #include "../amx_loader.h"
 
-using amx32 = amx::amx<uint32_t, amx::memory_manager_neumann<amx::memory_backing_paged_buffers<5>>>;
+using amx32 = amx::amx<uint64_t, amx::memory_manager_neumann<amx::memory_backing_paged_buffers<5>>>;
 using amx32_loader = amx::loader<amx32>;
 
-static amx32::error five(amx32* amx, amx32_loader* loader, void* user, amx32::cell argc, amx32::cell argv, amx32::cell& retval)
+static amx::error five(amx32* amx, amx32_loader* loader, void* user, amx32::cell argc, amx32::cell argv, amx32::cell& retval)
 {
   printf("five was called!!\n");
   const auto get_two = loader->get_public("get_two");
   if (!get_two)
   {
     printf("get_two not found!!\n");
-    return amx32::error::callback_abort;
+    return amx::error::callback_abort;
   }
   amx32::cell two{};
   amx32::cell two_ref{};
@@ -23,7 +23,7 @@ static amx32::error five(amx32* amx, amx32_loader* loader, void* user, amx32::ce
   if(!success)
   {
     printf("failed mapping in two!!\n");
-    return amx32::error::callback_abort;
+    return amx::error::callback_abort;
   }
   printf("mapped va for two: %X\n", (uint32_t)two_ref);
   const auto two_ref_segment_relative = two_ref - amx->DAT;
@@ -31,27 +31,27 @@ static amx32::error five(amx32* amx, amx32_loader* loader, void* user, amx32::ce
   amx32::cell useless{};
   auto result = amx->call(get_two, useless, { two_ref_segment_relative });
   amx->mem.data().unmap(two_ref, 1);
-  if (result != amx32::error::success)
+  if (result != amx::error::success)
   {
     printf("calling get_two failed with %d!!\n", (int)result);
-    return amx32::error::callback_abort;
+    return amx::error::callback_abort;
   }
   
   const auto square = loader->get_public("square");
   if (!square)
   {
     printf("square not found!!\n");
-    return amx32::error::callback_abort;
+    return amx::error::callback_abort;
   }
   amx32::cell squared{};
   result = amx->call(square, squared, {two});
-  if (result != amx32::error::success)
+  if (result != amx::error::success)
   {
     printf("calling square failed with %d!!\n", (int)result);
-    return amx32::error::callback_abort;
+    return amx::error::callback_abort;
   }
   retval = squared + 1;
-  return amx32::error::success;
+  return amx::error::success;
 }
 
 constexpr static const char* OPCODE_NAME[] = {
@@ -72,14 +72,14 @@ constexpr static bool OPCODE_HAS_OPERAND[] = {
   1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0
 };
 
-static amx32::error on_single_step(amx32* amx, amx32_loader* loader, void* user)
+static amx::error on_single_step(amx32* amx, amx32_loader* loader, void* user)
 {
   const auto cip = amx->CIP;
   const auto popcode = amx->code_v2p(cip);
   if (!popcode)
   {
     printf("** INVALID CIP **\n");
-    return amx32::error::success;
+    return amx::error::success;
   }
   const auto opcode = *popcode;
   const auto opcode_valid = opcode < std::size(OPCODE_NAME);
@@ -94,7 +94,7 @@ static amx32::error on_single_step(amx32* amx, amx32_loader* loader, void* user)
   }
   printf("\n");
 
-  return amx32::error::success;
+  return amx::error::success;
 }
 
 static constexpr amx32_loader::native_arg NATIVES[]{
@@ -136,7 +136,7 @@ int main(int argc, char** argv)
 
   const auto result = ldr.init(file.data(), file.size(), CALLBACKS);
 
-  if (result != amx32_loader::error::success)
+  if (result != amx::loader_error::success)
   {
     fprintf(stderr, "Malformed file: %d\n", (int)result);
     return -2;
@@ -153,7 +153,7 @@ int main(int argc, char** argv)
   amx32::cell retval{};
   const auto amx_result = ldr.amx.call(main, retval);
 
-  if (amx_result != amx32::error::success)
+  if (amx_result != amx::error::success)
   {
     fprintf(stderr, "Error during execution: %d\n", (int)amx_result);
     return -4;

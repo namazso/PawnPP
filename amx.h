@@ -5,6 +5,19 @@
 
 namespace amx
 {
+  enum class error
+  {
+    success = 0,
+    access_violation,
+    access_violation_code,
+    invalid_instruction,
+    invalid_operand,
+    division_with_zero,
+    halt,
+    bounds,
+    callback_abort
+  };
+
   namespace detail
   {
     template <typename A, typename B>
@@ -298,19 +311,6 @@ namespace amx
     cell STK{};
     // heap pointer. Dynamically allocated memory comes from the heapand the HEA register indicates the top of the heap.
     cell HEA{};
-    
-    enum class error
-    {
-      success = 0,
-      access_violation,
-      access_violation_code,
-      invalid_instruction,
-      invalid_operand,
-      division_with_zero,
-      halt,
-      bounds,
-      callback_abort
-    };
 
   private:
     error step();
@@ -438,7 +438,7 @@ namespace amx
   };
 
   template <typename Cell, typename MemoryManager>
-  typename amx<Cell, MemoryManager>::error amx<Cell, MemoryManager>::step()
+  error amx<Cell, MemoryManager>::step()
   {
 
     enum : cell {
