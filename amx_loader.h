@@ -184,7 +184,7 @@ namespace amx
       const auto pargc = amx.data_v2p(stk);
       if (!pargc)
         return error::access_violation;
-      return _natives[index](&amx, this, _callback_user_data, (*pargc / sizeof(cell)), stk + sizeof(cell), pri);
+      return _natives[(size_t)index](&amx, this, _callback_user_data, (*pargc / sizeof(cell)), stk + sizeof(cell), pri);
     }
 
     static error amx_callback_wrapper(amx_t*, void* user_data, cell index, cell stk, cell& pri)
