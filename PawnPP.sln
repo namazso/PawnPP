@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.31402.337
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PawnPP", "PawnPP\PawnPP.vcxproj", "{D188BFCE-F65A-4F2C-B97E-7C7A568ADFEE}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Example", "Example\Example.vcxproj", "{D188BFCE-F65A-4F2C-B97E-7C7A568ADFEE}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test", "Test\Test.vcxproj", "{8EAA84E8-AFD6-464B-9226-DBA2E0B26933}"
 EndProject
