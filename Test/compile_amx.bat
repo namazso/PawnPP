@@ -1,3 +1,3 @@
-pawncc -C16 -otest16.amx test.p
-pawncc -C32 -otest32.amx test.p
-pawncc -C64 -otest64.amx test.p
+pawncc test.p -C16 -otest16
+pawncc test.p -C32 -otest32
+pawncc test.p -C64 -otest64
