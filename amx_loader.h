@@ -182,7 +182,7 @@ namespace amx
         return _on_single_step ? _on_single_step(&amx, this, _callback_user_data) : error::success;
       if (index == amx_t::cbid_break)
         return _on_break ? _on_break(&amx, this, _callback_user_data) : error::success;
-      if (index > _natives.size())
+      if (index >= _natives.size())
         return error::invalid_operand;
       const auto pargc = amx.data_v2p(stk);
       if (!pargc)
