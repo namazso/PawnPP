@@ -9,34 +9,6 @@
 #include <cstring>
 #include "amx.h"
 
-#ifndef AMX_IS_LITTLE_ENDIAN
-
-#if defined(BYTE_ORDER)
-#if BYTE_ORDER == LITTLE_ENDIAN
-#define AMX_IS_LITTLE_ENDIAN 1
-#elif BYTE_ORDER == BIG_ENDIAN
-#define AMX_IS_LITTLE_ENDIAN 0
-#else
-#error "Only little endian and big endian supported"
-#endif
-#endif
-
-#if defined(__BYTE_ORDER)
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-#define AMX_IS_LITTLE_ENDIAN 1
-#elif __BYTE_ORDER == __BIG_ENDIAN
-#define AMX_IS_LITTLE_ENDIAN 0
-#else
-#error "Only little endian and big endian supported"
-#endif
-#endif
-
-#endif
-
-#ifndef AMX_IS_LITTLE_ENDIAN
-#error "Unable to determine endianness, please set AMX_IS_LITTLE_ENDIAN as needed"
-#endif
-
 namespace amx
 {
   enum class loader_error
@@ -54,30 +26,31 @@ namespace amx
   namespace detail
   {
     template <typename T>
-    static T byteswap(T t)
-    {
-      for (size_t i = 0; i < sizeof(t) / 2; ++i)
-        std::swap(*(((char*)&t) + i), *((char*)&t + sizeof(t) - 1 - i));
-      return t;
-    }
-
-    template <typename T>
-    static T from_le(T t)
-    {
-#if !AMX_IS_LITTLE_ENDIAN
-      return byteswap(t);
-#else
-      return t;
-#endif
-    }
-
-    template <typename T>
     static T read_le(const uint8_t* p)
     {
-      T t{};
-      memcpy(&t, p, sizeof(t));
-      t = from_le(t);
-      return t;
+      static_assert(std::is_integral<T>::value == true, "only integers are supported");
+      using uT = typename std::make_unsigned<T>::type;
+      uT t{};
+      for (int i = (int)sizeof(uT) - 1; i >= 0; --i)
+      {
+        t <<= 8;
+        t |= p[i];
+      }
+      return (T)t;
+    }
+
+    template <typename T>
+    static T read_be(const uint8_t* p)
+    {
+      static_assert(std::is_integral<T>::value == true, "only integers are supported");
+      using uT = typename std::make_unsigned<T>::type;
+      uT t{};
+      for (int i = 0; i < sizeof(uT); ++i)
+      {
+        t <<= 8;
+        t |= p[i];
+      }
+      return (T)t;
     }
 
     template <typename T>
@@ -281,13 +254,13 @@ namespace amx
         return loader_error::invalid_file;
 
       for (auto& c : _code)
-        c = from_le(c);
+        c = read_le<cell>((uint8_t*)&c);
 
       if (!select_array(buf, buf_size, dat, hea, _data))
         return loader_error::invalid_file;
 
       for (auto& c : _data)
-        c = from_le(c);
+        c = read_le<cell>((uint8_t*)&c);
 
       const auto extra_size = (stp - hea) + sizeof(cell) - 1;
       const auto data_oldsize = _data.size();

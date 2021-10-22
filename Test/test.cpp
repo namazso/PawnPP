@@ -5,8 +5,6 @@
 #include <vector>
 #include "gtest/gtest.h"
 
-#define LITTLE_ENDIAN 1
-
 #include "../amx.h"
 #include "../amx_loader.h"
 

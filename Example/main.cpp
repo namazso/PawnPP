@@ -24,8 +24,6 @@
 //  For more information, please refer to <http://unlicense.org/>
 #include <cstdio>
 #include <fstream>
-
-#define AMX_IS_LITTLE_ENDIAN 1
 #include <cinttypes>
 
 #include "../amx.h"
