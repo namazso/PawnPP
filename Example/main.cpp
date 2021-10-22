@@ -25,7 +25,7 @@
 #include <cstdio>
 #include <fstream>
 
-#define LITTLE_ENDIAN 1
+#define AMX_IS_LITTLE_ENDIAN 1
 #include <cinttypes>
 
 #include "../amx.h"

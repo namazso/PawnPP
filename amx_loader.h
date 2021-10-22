@@ -5,7 +5,37 @@
 #include <vector>
 #include <unordered_map>
 #include <string>
+#include <algorithm>
+#include <cstring>
 #include "amx.h"
+
+#ifndef AMX_IS_LITTLE_ENDIAN
+
+#if defined(BYTE_ORDER)
+#if BYTE_ORDER == LITTLE_ENDIAN
+#define AMX_IS_LITTLE_ENDIAN 1
+#elif BYTE_ORDER == BIG_ENDIAN
+#define AMX_IS_LITTLE_ENDIAN 0
+#else
+#error "Only little endian and big endian supported"
+#endif
+#endif
+
+#if defined(__BYTE_ORDER)
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#define AMX_IS_LITTLE_ENDIAN 1
+#elif __BYTE_ORDER == __BIG_ENDIAN
+#define AMX_IS_LITTLE_ENDIAN 0
+#else
+#error "Only little endian and big endian supported"
+#endif
+#endif
+
+#endif
+
+#ifndef AMX_IS_LITTLE_ENDIAN
+#error "Unable to determine endianness, please set AMX_IS_LITTLE_ENDIAN as needed"
+#endif
 
 namespace amx
 {
@@ -34,12 +64,10 @@ namespace amx
     template <typename T>
     static T from_le(T t)
     {
-#if defined(BIG_ENDIAN)
+#if !AMX_IS_LITTLE_ENDIAN
       return byteswap(t);
-#elif defined(LITTLE_ENDIAN)
-      return t;
 #else
-#error Define either BIG_ENDIAN or LITTLE_ENDIAN
+      return t;
 #endif
     }
 
