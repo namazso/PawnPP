@@ -249,26 +249,46 @@ namespace amx
         return loader_error::feature_not_supported;
       if (defsize < 8)
         return loader_error::invalid_file;
-
-      if (!select_array(buf, buf_size, cod, dat, _code))
+      
+      _code.clear();
+      auto success = iter_valarray(
+        buf,
+        buf_size,
+        cod,
+        dat,
+        sizeof(cell),
+        [&](const uint8_t* p)
+        {
+          _code.push_back(read_le<cell>(p));
+          return true;
+        }
+      );
+      if (!success)
         return loader_error::invalid_file;
-
-      for (auto& c : _code)
-        c = read_le<cell>((uint8_t*)&c);
-
-      if (!select_array(buf, buf_size, dat, hea, _data))
+      
+      _data.clear();
+      success = iter_valarray(
+        buf,
+        buf_size,
+        dat,
+        hea,
+        sizeof(cell),
+        [&](const uint8_t* p)
+        {
+          _data.push_back(read_le<cell>(p));
+          return true;
+        }
+      );
+      if (!success)
         return loader_error::invalid_file;
-
-      for (auto& c : _data)
-        c = read_le<cell>((uint8_t*)&c);
-
+      
       const auto extra_size = (stp - hea) + sizeof(cell) - 1;
       const auto data_oldsize = _data.size();
       _data.resize(data_oldsize + extra_size / sizeof(cell));
 
       _main = (cip == (uint32_t)-1 ? 0 : cip);
 
-      auto success = iter_valarray(
+      success = iter_valarray(
         buf,
         buf_size,
         publics,
