@@ -1071,7 +1071,7 @@ namespace amx
         CODEDATA(INCP(casetbl));
         cell record_count = RESULT();
         CODEDATA(INCP(casetbl));
-        CIP = casetbl - cell_bytes + RESULT(); // no match cip
+        CIP = casetbl - cell_bytes * 2 + RESULT(); // no match cip
         while (record_count)
         {
           CODEDATA(INCP(casetbl));
@@ -1080,7 +1080,7 @@ namespace amx
           cell match_cip = RESULT();
           if (PRI == test_val)
           {
-            CIP = casetbl - cell_bytes + match_cip;
+            CIP = casetbl - cell_bytes * 2 + match_cip;
             break;
           }
           --record_count;
