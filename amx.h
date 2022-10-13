@@ -451,8 +451,9 @@ namespace amx
     error call(cell cip, cell& pri, std::initializer_list<cell> args = {})
     {
       cell size{};
-      for (const auto arg : args)
+      for (auto it = std::crbegin(args); it != std::crend(args); ++it)
       {
+        const auto arg = *it;
         const auto result = push(arg);
         if (result != error::success)
           return result;
