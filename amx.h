@@ -823,7 +823,7 @@ namespace amx
       break;
 
     case OP_PUSHR_PRI:
-      PUSH(PRI + DAT);
+      PUSH(PRI);
       break;
 
     case OP_POP_PRI:
