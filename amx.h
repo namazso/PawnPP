@@ -448,11 +448,6 @@ namespace amx
       return error::success;
     }
 
-    void pop()
-    {
-      STK += cell_bytes;
-    }
-
   private:
     error call_raw(cell cip, cell& pri)
     {
@@ -617,7 +612,6 @@ namespace amx
     const static auto INC = [](cell& v) -> cell& { return (v += cell_bytes); };
     const static auto DEC = [](cell& v) -> cell& { return (v -= cell_bytes); };
     const static auto INCP = [](cell& v) -> cell { cell c = v; return (v += cell_bytes), c; };
-    const static auto DECP = [](cell& v) -> cell { cell c = v; return (v -= cell_bytes), c; };
 
     _tmp = code_v2p(INCP(CIP));
     if (!_tmp)
