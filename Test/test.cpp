@@ -635,6 +635,19 @@ TEST(PagedBacking, MapLastPages)
   EXPECT_FALSE(b->map(more.data(), more.size(), va_more));
 }
 
+TEST(PagedBacking, MaxIndexBits)
+{
+  using backing = amx::memory_backing_paged_buffers<15>::type<uint16_t>;
+  using cell = uint16_t;
+  const auto b = std::make_unique<backing>();
+  std::vector<cell> buf(4);
+  cell va{};
+  ASSERT_TRUE(b->map(buf.data(), buf.size(), va));
+  EXPECT_EQ(b->translate(va), buf.data());
+  EXPECT_EQ(b->translate((cell)(va + 2)), buf.data() + 1);
+  EXPECT_EQ(b->translate((cell)(va + 1)), nullptr);
+}
+
 TEST(PagedBacking, MapRejectsOversize)
 {
   using backing = amx::memory_backing_paged_buffers<5>::type<uint16_t>;

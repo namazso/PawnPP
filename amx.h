@@ -109,11 +109,11 @@ namespace amx
       constexpr static size_t index_bits = IndexBits;
       constexpr static size_t offset_bits = cell_bits - index_bits;
 
-      constexpr static auto page_count = (cell)1 << index_bits;
-      constexpr static auto page_size = (cell)1 << offset_bits;
-
-      static_assert(index_bits <= cell_bits, "page bits more than cell bit size!");
+      static_assert(index_bits < cell_bits, "page bits must be less than cell bit size!");
       static_assert(index_bits >= 1, "must use at least 1 bit for index");
+
+      constexpr static auto page_count = (cell)((ulonger)1 << index_bits);
+      constexpr static auto page_size = (cell)((ulonger)1 << offset_bits);
 
       struct mapping
       {
