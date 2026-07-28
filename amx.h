@@ -149,11 +149,13 @@ namespace amx
           return true;
         }
 
-        if ((longer)size > (longer)~(cell)0)
+        if ((longer)size > (longer)((cell)~(cell)0 / cell_bytes))
           return false; // mapping bigger than address space
+        if (size > (size_t)-1 / (size_t)cell_bytes)
+          return false;
 
         size *= cell_bytes;
-        const auto count = page_index((cell)(size + page_size - 1));
+        const auto count = (cell)(size / page_size + (size % page_size != 0 ? 1 : 0));
         cell in_a_row = 0;
         cell index = 0;
         do
@@ -172,6 +174,7 @@ namespace amx
         return false;
 
       found:
+        index = (cell)(index - count + 1);
         for (cell i = 0; i < count; ++i)
         {
           _mappings[index + i].buf = buf + page_size / (cell)cell_bytes * i;
@@ -186,7 +189,7 @@ namespace amx
       {
         const auto m = mapping_for_va(va);
         size *= cell_bytes;
-        const auto count = page_index((cell)(size + page_size - 1));
+        const auto count = (cell)(size / page_size + (size % page_size != 0 ? 1 : 0));
         for (cell i = 0; i < count; ++i)
         {
           m[i].buf = nullptr;
@@ -206,6 +209,8 @@ namespace amx
     public:
       cell* translate(cell va)
       {
+        if (va % cell_bytes != 0)
+          return nullptr;
         if (va >= _size)
           return nullptr;
         return _buf + (va / cell_bytes);
@@ -214,6 +219,10 @@ namespace amx
       bool map(cell* buf, size_t size, cell& va)
       {
         if (_buf)
+          return false;
+        if ((longer)size > (longer)((cell)~(cell)0 / cell_bytes))
+          return false;
+        if (size > (size_t)-1 / (size_t)cell_bytes)
           return false;
         _buf = buf;
         _size = size * cell_bytes;
@@ -242,16 +251,15 @@ namespace amx
 
       uintptr_t _backing_bits{};
 
-      static void _asserts()
-      {
-        static_assert(valid_bits <= std::numeric_limits<uintptr_t>::digits, "virtual address space bigger than host");
-        static_assert(offset_mask_align != 0, "too few valid bits!");
-      }
+      static_assert(valid_bits <= std::numeric_limits<uintptr_t>::digits, "virtual address space bigger than host");
+      static_assert(offset_mask_align != 0, "too few valid bits!");
 
     public:
       cell* translate(cell va)
       {
-        return (cell*)((va & offset_mask_align) | _backing_bits);
+        if (va % cell_bytes != 0)
+          return nullptr;
+        return (cell*)((uintptr_t)(va & offset_mask_align) | _backing_bits);
       }
 
       bool map(cell* buf, size_t size, cell& va)
@@ -261,10 +269,12 @@ namespace amx
         if (_backing_bits)
           return false;
 
-        AMX_ASSERT(((uintptr_t)buf & offset_mask) == 0);
-        AMX_ASSERT(size * cell_bytes > offset_mask);
+        if (((uintptr_t)buf & (uintptr_t)offset_mask) != 0)
+          return false;
+        if (size < ((size_t)offset_mask + 1) / (size_t)cell_bytes)
+          return false;
 
-        _backing_bits = (uintptr_t)buf & offset_mask_align;
+        _backing_bits = (uintptr_t)buf & ~(uintptr_t)offset_mask;
         return true;
       }
 

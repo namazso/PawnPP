@@ -2,6 +2,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #include <fstream>
+#include <memory>
 #include <vector>
 #include "gtest/gtest.h"
 
@@ -109,3 +110,85 @@ TEST_PAWN(Statics, amx::error::success, 12);
 TEST_PAWN(Packed, amx::error::success, 1);
 TEST_PAWN(GotoStackFixup, amx::error::success, 4105);
 TEST_PAWN(Bounds, amx::error::success, 6);
+
+TEST(PagedBacking, MapUsesRunStart)
+{
+  using backing = amx::memory_backing_paged_buffers<5>::type<uint16_t>;
+  using cell = uint16_t;
+  constexpr size_t page_cells = 1024;
+  const auto b = std::make_unique<backing>();
+  std::vector<cell> bufa(page_cells), bufb(page_cells), bufc(page_cells), bufd(2 * page_cells);
+  cell va_a{}, va_b{}, va_c{}, va_d{};
+  ASSERT_TRUE(b->map(bufa.data(), bufa.size(), va_a));
+  ASSERT_TRUE(b->map(bufb.data(), bufb.size(), va_b));
+  ASSERT_TRUE(b->map(bufc.data(), bufc.size(), va_c));
+  b->unmap(va_a, bufa.size());
+  b->unmap(va_b, bufb.size());
+  ASSERT_TRUE(b->map(bufd.data(), bufd.size(), va_d));
+  EXPECT_EQ(va_d, va_a);
+  EXPECT_EQ(b->translate(va_c), bufc.data());
+  EXPECT_EQ(b->translate(va_d), bufd.data());
+  EXPECT_EQ(b->translate((cell)(va_d + 2048)), bufd.data() + page_cells);
+}
+
+TEST(PagedBacking, MapLastPages)
+{
+  using backing = amx::memory_backing_paged_buffers<5>::type<uint16_t>;
+  using cell = uint16_t;
+  constexpr size_t page_cells = 1024;
+  const auto b = std::make_unique<backing>();
+  std::vector<cell> big(30 * page_cells), two(2 * page_cells);
+  cell va_big{}, va_two{};
+  ASSERT_TRUE(b->map(big.data(), big.size(), va_big));
+  ASSERT_TRUE(b->map(two.data(), two.size(), va_two));
+  EXPECT_EQ(va_two, (cell)(30 * 2048));
+  EXPECT_EQ(b->translate(va_two), two.data());
+  EXPECT_EQ(b->translate((cell)(va_two + 2048)), two.data() + page_cells);
+  std::vector<cell> more(page_cells);
+  cell va_more{};
+  EXPECT_FALSE(b->map(more.data(), more.size(), va_more));
+}
+
+TEST(PagedBacking, MapRejectsOversize)
+{
+  using backing = amx::memory_backing_paged_buffers<5>::type<uint16_t>;
+  using cell = uint16_t;
+  const auto b = std::make_unique<backing>();
+  std::vector<cell> buf(1);
+  cell va{};
+  EXPECT_FALSE(b->map(buf.data(), 65535, va));
+}
+
+TEST(ContiguousBacking, RejectsMisalignedAddresses)
+{
+  using backing = amx::memory_backing_contignous_buffer::type<uint32_t>;
+  backing b{};
+  uint32_t buf[4]{};
+  uint32_t va{};
+  ASSERT_TRUE(b.map(buf, 4, va));
+  EXPECT_EQ(va, 0u);
+  EXPECT_EQ(b.translate(0), &buf[0]);
+  EXPECT_EQ(b.translate(4), &buf[1]);
+  EXPECT_EQ(b.translate(1), nullptr);
+  EXPECT_EQ(b.translate(2), nullptr);
+  EXPECT_EQ(b.translate(16), nullptr);
+}
+
+TEST(PartialAddressBacking, TranslatesToHostPointers)
+{
+  using backing = amx::memory_backing_partial_address_space<16>::type<uint32_t>;
+  backing b{};
+  constexpr size_t window_bytes = 0x10000;
+  std::vector<uint32_t> storage(window_bytes / sizeof(uint32_t) * 2);
+  const auto base = (uint32_t*)(((uintptr_t)storage.data() + window_bytes - 1) & ~(uintptr_t)(window_bytes - 1));
+  uint32_t va{};
+  EXPECT_FALSE(b.map(base + 1, window_bytes / sizeof(uint32_t), va));
+  EXPECT_FALSE(b.map(base, 1, va));
+  ASSERT_TRUE(b.map(base, window_bytes / sizeof(uint32_t), va));
+  EXPECT_EQ(va, 0u);
+  EXPECT_EQ(b.translate(0), base);
+  EXPECT_EQ(b.translate(4), base + 1);
+  EXPECT_EQ(b.translate(2), nullptr);
+  base[1] = 0xDEADBEEF;
+  EXPECT_EQ(*b.translate(4), 0xDEADBEEFu);
+}
