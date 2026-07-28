@@ -870,6 +870,8 @@ namespace amx
       POP(CIP);
       DATA(STK);
       STK += RESULT() + cell_bytes;
+      if (STK < HEA || STK > STP)
+        return error::stack_error;
       break;
 
     case OP_CALL:

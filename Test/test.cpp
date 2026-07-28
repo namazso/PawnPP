@@ -184,6 +184,7 @@ namespace raw
     op_lodb_i = 8,
     op_const_pri = 9,
     op_const_alt = 10,
+    op_stor = 13,
     op_strb_i = 17,
     op_sctrl = 20,
     op_stack = 28,
@@ -261,6 +262,12 @@ TEST(RawAmx, PushIntoHeapFails)
 {
   raw::rcell pri{};
   EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_retn }, pri, nullptr, 248), amx::error::stack_error);
+}
+
+TEST(RawAmx, RetnChecksStackBounds)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 0x80000000u, raw::op_stor, 252, raw::op_retn }, pri), amx::error::stack_error);
 }
 
 TEST(RawAmx, SctrlChecksHeapBounds)
