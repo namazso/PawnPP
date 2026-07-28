@@ -260,6 +260,8 @@ namespace amx
     public:
       cell* translate(cell va)
       {
+        if (!_backing_bits)
+          return nullptr;
         if (va % cell_bytes != 0)
           return nullptr;
         return (cell*)((uintptr_t)(va & offset_mask_align) | _backing_bits);
@@ -272,6 +274,8 @@ namespace amx
         if (_backing_bits)
           return false;
 
+        if (!buf)
+          return false;
         if (((uintptr_t)buf & (uintptr_t)offset_mask) != 0)
           return false;
         if (size < ((size_t)offset_mask + 1) / (size_t)cell_bytes)

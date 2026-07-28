@@ -707,6 +707,16 @@ TEST(ContiguousBacking, RejectsMisalignedAddresses)
   EXPECT_EQ(b.translate(16), nullptr);
 }
 
+TEST(PartialAddressBacking, UnmappedTranslateReturnsNull)
+{
+  using backing = amx::memory_backing_partial_address_space<16>::type<uint32_t>;
+  backing b{};
+  EXPECT_EQ(b.translate(0), nullptr);
+  EXPECT_EQ(b.translate(4), nullptr);
+  uint32_t va{};
+  EXPECT_FALSE(b.map(nullptr, 0x10000 / sizeof(uint32_t), va));
+}
+
 TEST(PartialAddressBacking, Works16Bit)
 {
   using backing = amx::memory_backing_partial_address_space<8>::type<uint16_t>;
