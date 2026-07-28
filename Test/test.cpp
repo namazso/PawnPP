@@ -200,6 +200,7 @@ namespace raw
     op_cmps = 65,
     op_fill = 66,
     op_halt = 67,
+    op_bounds = 68,
     op_sysreq = 69
   };
 
@@ -389,6 +390,15 @@ TEST(RawAmx, FillRequiresCellMultiple)
 {
   raw::rcell pri{};
   EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_alt, 0, raw::op_const_pri, 7, raw::op_fill, 6, raw::op_retn }, pri), amx::error::invalid_operand);
+}
+
+TEST(RawAmx, BoundsChecks)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 5, raw::op_bounds, 10, raw::op_retn }, pri), amx::error::success);
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 11, raw::op_bounds, 10, raw::op_retn }, pri), amx::error::bounds);
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, (raw::rcell)-1, raw::op_bounds, 10, raw::op_retn }, pri), amx::error::bounds);
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, (raw::rcell)-1, raw::op_bounds, (raw::rcell)-1, raw::op_retn }, pri), amx::error::bounds);
 }
 
 TEST(RawAmx, HaltPreservesExitValue)

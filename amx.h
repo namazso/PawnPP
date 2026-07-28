@@ -1070,7 +1070,7 @@ namespace amx
 
     case OP_BOUNDS:
       OPERAND();
-      if (PRI > operand)
+      if ((scell)PRI < 0 || (scell)PRI > (scell)operand)
         return error::bounds;
       break;
 
