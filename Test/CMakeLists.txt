@@ -13,5 +13,10 @@ FetchContent_MakeAvailable(googletest)
 add_executable(pawnpp_test test.cpp)
 target_link_libraries(pawnpp_test PRIVATE pawnpp GTest::gtest_main)
 
+configure_file(test16.amx test16.amx COPYONLY)
+configure_file(test32.amx test32.amx COPYONLY)
+configure_file(test64.amx test64.amx COPYONLY)
+configure_file(../Example/test.amx ../Example/test.amx COPYONLY)
+
 include(GoogleTest)
-gtest_discover_tests(pawnpp_test WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+gtest_discover_tests(pawnpp_test)
