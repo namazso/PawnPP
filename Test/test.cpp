@@ -114,7 +114,45 @@ TEST_PAWN(Bounds, amx::error::success, 6);
 namespace raw
 {
   using raw_amx = amx::amx<uint32_t, amx::memory_manager_neumann<amx::memory_backing_paged_buffers<5>>>;
+  using raw_loader = amx::loader<raw_amx>;
   using rcell = raw_amx::cell;
+
+  static amx::error opaque_native(raw_amx*, raw_loader*, void*, rcell, rcell, rcell&)
+  {
+    return amx::error::success;
+  }
+
+  static constexpr raw_loader::native_arg NATIVES[]{
+    { "opaque", &opaque_native }
+  };
+
+  static constexpr raw_loader::callbacks_arg CALLBACKS{
+    NATIVES,
+    std::size(NATIVES),
+    nullptr,
+    nullptr,
+    nullptr
+  };
+
+  static amx::loader_error load(const std::vector<uint8_t>& file)
+  {
+    const auto ldr = std::make_unique<raw_loader>();
+    return ldr->init(file.data(), file.size(), CALLBACKS);
+  }
+
+  static void patch32(std::vector<uint8_t>& file, size_t offset, uint32_t value)
+  {
+    for (size_t i = 0; i < 4; ++i)
+      file[offset + i] = (uint8_t)(value >> (i * 8));
+  }
+
+  static uint32_t get32(const std::vector<uint8_t>& file, size_t offset)
+  {
+    uint32_t value{};
+    for (size_t i = 0; i < 4; ++i)
+      value |= (uint32_t)file[offset + i] << (i * 8);
+    return value;
+  }
 
   enum : rcell
   {
@@ -202,6 +240,97 @@ TEST(RawAmx, SctrlChecksHeapBounds)
 {
   raw::rcell pri{};
   EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 0x10000, raw::op_sctrl, 2, raw::op_retn }, pri), amx::error::heap_error);
+}
+
+TEST(LoaderValidation, Baseline)
+{
+  const auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  EXPECT_EQ(raw::load(file), amx::loader_error::success);
+}
+
+TEST(LoaderValidation, StpBelowHea)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  raw::patch32(file, 24, raw::get32(file, 20) - 1);
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+  raw::patch32(file, 24, raw::get32(file, 20) - 4);
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
+TEST(LoaderValidation, MisalignedStp)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  raw::patch32(file, 24, raw::get32(file, 24) + 2);
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
+TEST(LoaderValidation, HeaBeyondSize)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  raw::patch32(file, 20, raw::get32(file, 0) + 4);
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
+TEST(LoaderValidation, NonMonotonicTables)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  raw::patch32(file, 32, raw::get32(file, 36) + 8);
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
+TEST(LoaderValidation, TableOffsetsPastFile)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  raw::patch32(file, 32, 0xFFFFFF00u);
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
+TEST(LoaderValidation, CodeSectionBeforeHeader)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  raw::patch32(file, 12, 0);
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
+TEST(LoaderValidation, EntryPointOutOfCode)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  raw::patch32(file, 28, raw::get32(file, 16) - raw::get32(file, 12));
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+  raw::patch32(file, 28, 2);
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
+TEST(LoaderValidation, PublicAddressOutOfCode)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  raw::patch32(file, 60, raw::get32(file, 16) - raw::get32(file, 12));
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
+TEST(LoaderValidation, PublicNameOffsetPastFile)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  raw::patch32(file, 64, raw::get32(file, 0));
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
+TEST(LoaderValidation, DeclaredSizeTooSmall)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  raw::patch32(file, 0, 59);
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
 }
 
 TEST(PagedBacking, MapUsesRunStart)

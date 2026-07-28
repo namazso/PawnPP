@@ -20,7 +20,8 @@ namespace amx
     feature_not_supported,
     wrong_cell_size,
     native_not_resolved,
-    unknown
+    unknown,
+    out_of_memory
   };
 
   namespace detail
@@ -53,26 +54,6 @@ namespace amx
       return (T)t;
     }
 
-    template <typename T>
-    static bool select_array(const uint8_t* buf, size_t buf_size, size_t begin_offset, size_t end_offset, std::vector<T>& out)
-    {
-      const auto begin = buf + begin_offset;
-      const auto end = buf + end_offset;
-      const auto size = (size_t)(end - begin);
-      const auto buf_end = buf + buf_size;
-
-      if (begin < buf || begin > buf_end)
-        return false;
-      if (end < buf || end > buf_end)
-        return false;
-      if (begin > end || size % sizeof(T) != 0)
-        return false;
-
-      out.resize(size / sizeof(T));
-      memcpy(out.data(), begin, size);
-      return true;
-    }
-
     template <typename Fn>
     static bool iter_valarray(
       const uint8_t* buf,
@@ -83,18 +64,15 @@ namespace amx
       Fn fn = {}
     )
     {
+      if (begin_offset > buf_size || end_offset > buf_size)
+        return false;
+      if (begin_offset > end_offset)
+        return false;
+      const auto size = end_offset - begin_offset;
+      if (size % entry_size != 0)
+        return false;
+
       const auto begin = buf + begin_offset;
-      const auto end = buf + end_offset;
-      const auto size = (size_t)(end - begin);
-      const auto buf_end = buf + buf_size;
-
-      if (begin < buf || begin > buf_end)
-        return false;
-      if (end < buf || end > buf_end)
-        return false;
-      if (begin > end || size % entry_size != 0)
-        return false;
-
       for (size_t i = 0; i < size / entry_size; ++i)
         if (!fn(begin + i * entry_size))
           return false;
@@ -202,10 +180,6 @@ namespace amx
       static_assert(expected_magic != 0, "unsupported cell size");
       using namespace detail;
 
-      _on_single_step = callbacks.on_single_step;
-      _on_break = callbacks.on_break;
-      _callback_user_data = callbacks.user_data;
-
       if (buf_size < 60)
         return loader_error::invalid_file;
 
@@ -239,7 +213,7 @@ namespace amx
           return loader_error::invalid_file;
         }
       }
-      if (size > buf_size)
+      if (size < 60 || size > buf_size)
         return loader_error::invalid_file;
       if (file_version != 11)
         return loader_error::unsupported_file_version;
@@ -249,48 +223,69 @@ namespace amx
         return loader_error::feature_not_supported;
       if (defsize < 8)
         return loader_error::invalid_file;
-      
-      _code.clear();
+      if (cod < 60 || cod > dat || dat > hea || hea > size || stp < hea)
+        return loader_error::invalid_file;
+      if ((dat - cod) % sizeof(cell) != 0 || (hea - dat) % sizeof(cell) != 0 || (stp - hea) % sizeof(cell) != 0)
+        return loader_error::invalid_file;
+      if ((dat - cod) / sizeof(cell) > (cell)~(cell)0 / sizeof(cell))
+        return loader_error::invalid_file;
+      if ((stp - dat) / sizeof(cell) > (cell)~(cell)0 / sizeof(cell))
+        return loader_error::invalid_file;
+      if (publics < 60 || publics > natives || natives > libraries || libraries > pubvars || pubvars > tags || tags > cod)
+        return loader_error::invalid_file;
+      if (libraries != pubvars)
+        return loader_error::feature_not_supported;
+      if (cip != (uint32_t)-1 && (cip % sizeof(cell) != 0 || cip >= dat - cod))
+        return loader_error::invalid_file;
+
+      std::vector<cell> code;
       auto success = iter_valarray(
         buf,
-        buf_size,
+        size,
         cod,
         dat,
         sizeof(cell),
         [&](const uint8_t* p)
         {
-          _code.push_back(read_le<cell>(p));
+          code.push_back(read_le<cell>(p));
           return true;
         }
       );
       if (!success)
         return loader_error::invalid_file;
-      
-      _data.clear();
+
+      std::vector<cell> data;
       success = iter_valarray(
         buf,
-        buf_size,
+        size,
         dat,
         hea,
         sizeof(cell),
         [&](const uint8_t* p)
         {
-          _data.push_back(read_le<cell>(p));
+          data.push_back(read_le<cell>(p));
           return true;
         }
       );
       if (!success)
         return loader_error::invalid_file;
-      
-      const auto extra_size = (stp - hea) + sizeof(cell) - 1;
-      const auto data_oldsize = _data.size();
-      _data.resize(data_oldsize + extra_size / sizeof(cell));
 
-      _main = (cip == (uint32_t)-1 ? 0 : cip);
+      const auto data_oldsize = data.size();
+      try
+      {
+        data.resize(data_oldsize + (stp - hea) / sizeof(cell));
+      }
+      catch (const std::bad_alloc&)
+      {
+        return loader_error::out_of_memory;
+      }
 
+      const auto main = (cell)(cip == (uint32_t)-1 ? 0 : cip);
+
+      std::unordered_map<std::string, cell> publics_map;
       success = iter_valarray(
         buf,
-        buf_size,
+        size,
         publics,
         natives,
         defsize,
@@ -298,14 +293,16 @@ namespace amx
         {
           const auto address = read_le<uint32_t>(p);
           const auto nameofs = read_le<uint32_t>(p + 4);
-          auto nameend = nameofs;
-          for (; nameend < buf_size; ++nameend)
+          if (address % sizeof(cell) != 0 || address >= dat - cod)
+            return false;
+          auto nameend = (size_t)nameofs;
+          for (; nameend < size; ++nameend)
             if (!buf[nameend])
               break;
-          if (nameend >= buf_size)
+          if (nameend >= size)
             return false;
           std::string name{ (const char*)buf + nameofs, (const char*)buf + nameend };
-          this->_publics[name] = address;
+          publics_map[name] = (cell)address;
           return true;
         }
       );
@@ -314,20 +311,21 @@ namespace amx
         return loader_error::invalid_file;
 
       bool native_not_found = false;
+      std::vector<native_fn> natives_vec;
       success = iter_valarray(
         buf,
-        buf_size,
+        size,
         natives,
         libraries,
         defsize,
         [&](const uint8_t* p)
         {
           const auto nameofs = read_le<uint32_t>(p + 4);
-          auto nameend = nameofs;
-          for (; nameend < buf_size; ++nameend)
+          auto nameend = (size_t)nameofs;
+          for (; nameend < size; ++nameend)
             if (!buf[nameend])
               break;
-          if (nameend >= buf_size)
+          if (nameend >= size)
             return false;
           std::string name{ (const char*)buf + nameofs, (const char*)buf + nameend };
           const auto callbacks_natives_end = callbacks.natives + callbacks.natives_count;
@@ -341,7 +339,7 @@ namespace amx
             native_not_found = true;
             return false;
           }
-          this->_natives.push_back(result->callback);
+          natives_vec.push_back(result->callback);
           return true;
         }
       );
@@ -349,12 +347,10 @@ namespace amx
       if (!success)
         return native_not_found ? loader_error::native_not_resolved : loader_error::invalid_file;
 
-      if (libraries != pubvars)
-        return loader_error::feature_not_supported;
-
+      std::unordered_map<std::string, cell> pubvars_map;
       success = iter_valarray(
         buf,
-        buf_size,
+        size,
         pubvars,
         tags,
         defsize,
@@ -362,14 +358,16 @@ namespace amx
         {
           const auto address = read_le<uint32_t>(p);
           const auto nameofs = read_le<uint32_t>(p + 4);
-          auto nameend = nameofs;
-          for (; nameend < buf_size; ++nameend)
+          if (address % sizeof(cell) != 0 || address >= hea - dat)
+            return false;
+          auto nameend = (size_t)nameofs;
+          for (; nameend < size; ++nameend)
             if (!buf[nameend])
               break;
-          if (nameend >= buf_size)
+          if (nameend >= size)
             return false;
           std::string name{ (const char*)buf + nameofs, (const char*)buf + nameend };
-          this->_pubvars[name] = address;
+          pubvars_map[name] = (cell)address;
           return true;
         }
       );
@@ -377,15 +375,27 @@ namespace amx
       if (!success)
         return loader_error::invalid_file;
 
+      _on_single_step = callbacks.on_single_step;
+      _on_break = callbacks.on_break;
+      _callback_user_data = callbacks.user_data;
+
+      _code = std::move(code);
+      _data = std::move(data);
+      _publics = std::move(publics_map);
+      _pubvars = std::move(pubvars_map);
+      _natives = std::move(natives_vec);
+      _main = main;
+
       cell code_base{};
-      bool result = amx.mem.code().map(_code.data(), _code.size(), code_base);
-      if (!result)
+      if (!amx.mem.code().map(_code.data(), _code.size(), code_base))
         return loader_error::unknown;
 
       cell data_base{};
-      result = amx.mem.data().map(_data.data(), _data.size(), data_base);
-      if (!result)
+      if (!amx.mem.data().map(_data.data(), _data.size(), data_base))
+      {
+        amx.mem.code().unmap(code_base, _code.size());
         return loader_error::unknown;
+      }
 
       amx.COD = code_base;
       amx.DAT = data_base;
