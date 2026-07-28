@@ -117,8 +117,14 @@ namespace raw
   using raw_loader = amx::loader<raw_amx>;
   using rcell = raw_amx::cell;
 
-  static amx::error opaque_native(raw_amx*, raw_loader*, void*, rcell, rcell, rcell&)
+  static amx::error opaque_native(raw_amx* amx, raw_loader*, void*, rcell argc, rcell argv, rcell& retval)
   {
+    if (argc != 1)
+      return amx::error::invalid_operand;
+    const auto p = amx->data_v2p(argv);
+    if (!p)
+      return amx::error::access_violation;
+    retval = *p;
     return amx::error::success;
   }
 
@@ -129,6 +135,24 @@ namespace raw
   static constexpr raw_loader::callbacks_arg CALLBACKS{
     NATIVES,
     std::size(NATIVES),
+    nullptr,
+    nullptr,
+    nullptr
+  };
+
+  static amx::error five_native(raw_amx*, raw_loader*, void*, rcell, rcell, rcell& retval)
+  {
+    retval = 5;
+    return amx::error::success;
+  }
+
+  static constexpr raw_loader::native_arg EXAMPLE_NATIVES[]{
+    { "five", &five_native }
+  };
+
+  static constexpr raw_loader::callbacks_arg EXAMPLE_CALLBACKS{
+    EXAMPLE_NATIVES,
+    std::size(EXAMPLE_NATIVES),
     nullptr,
     nullptr,
     nullptr
@@ -496,6 +520,48 @@ TEST(LoaderValidation, DeclaredSizeTooSmall)
   ASSERT_FALSE(file.empty());
   raw::patch32(file, 0, 59);
   EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
+TEST(LoaderValidation, RejectsEncryptedFiles)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  file[8] |= 1 << 4;
+  EXPECT_EQ(raw::load(file), amx::loader_error::feature_not_supported);
+}
+
+TEST(LoaderLifecycle, ReinitReplacesState)
+{
+  const auto file32 = readall("test32.amx");
+  const auto file_ex = readall("../Example/test.amx");
+  ASSERT_FALSE(file32.empty());
+  ASSERT_FALSE(file_ex.empty());
+  const auto ldr = std::make_unique<raw::raw_loader>();
+  ASSERT_EQ(ldr->init(file32.data(), file32.size(), raw::CALLBACKS), amx::loader_error::success);
+  EXPECT_NE(ldr->get_public("test_Arithmetic"), 0u);
+  ASSERT_EQ(ldr->init(file_ex.data(), file_ex.size(), raw::EXAMPLE_CALLBACKS), amx::loader_error::success);
+  EXPECT_EQ(ldr->get_public("test_Arithmetic"), 0u);
+  EXPECT_NE(ldr->get_public("square"), 0u);
+  ASSERT_NE(ldr->get_main(), 0u);
+  raw::rcell retval{};
+  ASSERT_EQ(ldr->amx.call(ldr->get_main(), retval), amx::error::success);
+  EXPECT_EQ(retval, 7u);
+}
+
+TEST(LoaderLifecycle, FailedReinitKeepsOldState)
+{
+  const auto file32 = readall("test32.amx");
+  ASSERT_FALSE(file32.empty());
+  const auto ldr = std::make_unique<raw::raw_loader>();
+  ASSERT_EQ(ldr->init(file32.data(), file32.size(), raw::CALLBACKS), amx::loader_error::success);
+  auto corrupt = file32;
+  raw::patch32(corrupt, 24, raw::get32(corrupt, 20) - 4);
+  EXPECT_EQ(ldr->init(corrupt.data(), corrupt.size(), raw::CALLBACKS), amx::loader_error::invalid_file);
+  const auto fn = ldr->get_public("test_Arithmetic");
+  ASSERT_NE(fn, 0u);
+  raw::rcell retval{};
+  EXPECT_EQ(ldr->amx.call(fn, retval), amx::error::success);
+  EXPECT_EQ(retval, 1u);
 }
 
 TEST(PagedBacking, MapUsesRunStart)

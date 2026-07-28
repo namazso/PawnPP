@@ -103,6 +103,7 @@ namespace amx
       flag_debug      = 1 << 1,
       flag_nochecks   = 1 << 2,
       flag_sleep      = 1 << 3,
+      flag_crypt      = 1 << 4,
       flag_dseg_init  = 1 << 5,
     };
 
@@ -140,6 +141,9 @@ namespace amx
     std::unordered_map<std::string, cell> _pubvars;
 
     cell _main{};
+    cell _code_base{};
+    cell _data_base{};
+    bool _mapped{};
 
   public:
     cell get_public(const char* v)
@@ -262,7 +266,7 @@ namespace amx
         return loader_error::unsupported_file_version;
       if (amx_version > amx_t::version)
         return loader_error::unsupported_amx_version;
-      if (flags & flag_overlay || flags & flag_sleep)
+      if (flags & flag_overlay || flags & flag_sleep || flags & flag_crypt)
         return loader_error::feature_not_supported;
       if (defsize < 8)
         return loader_error::invalid_file;
@@ -426,6 +430,13 @@ namespace amx
       _on_break = callbacks.on_break;
       _callback_user_data = callbacks.user_data;
 
+      if (_mapped)
+      {
+        amx.mem.code().unmap(_code_base, _code.size());
+        amx.mem.data().unmap(_data_base, _data.size());
+        _mapped = false;
+      }
+
       _code = std::move(code);
       _data = std::move(data);
       _publics = std::move(publics_map);
@@ -444,9 +455,14 @@ namespace amx
         return loader_error::unknown;
       }
 
+      _code_base = code_base;
+      _data_base = data_base;
+      _mapped = true;
+
       amx.COD = code_base;
       amx.DAT = data_base;
 
+      amx.PRI = amx.ALT = amx.FRM = amx.CIP = 0;
       amx.STK = amx.STP = (cell)(_data.size() * sizeof(cell));
       amx.HEA = (cell)(data_oldsize * sizeof(cell));
 
