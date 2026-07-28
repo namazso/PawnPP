@@ -22,7 +22,9 @@ namespace amx
     division_with_zero,
     halt,
     bounds,
-    callback_abort
+    callback_abort,
+    stack_error,
+    heap_error
   };
 
   namespace detail
@@ -414,6 +416,8 @@ namespace amx
   public:
     error push(cell v)
     {
+      if (STK <= HEA)
+        return error::stack_error;
       STK -= cell_bytes;
       const auto target = data_v2p(STK);
       if (!target)
@@ -609,6 +613,7 @@ namespace amx
 #define RESULT() (*_tmp)
 
 #define PUSH(v) do {\
+    if (STK <= HEA) return error::stack_error;\
     DEC(STK);\
     cell _push_tmp1 = v;\
     cell* _push_tmp2 = data_v2p(STK);\
@@ -805,9 +810,13 @@ namespace amx
       {
       case 2:
         HEA = PRI;
+        if (HEA > STK)
+          return error::heap_error;
         break;
       case 4:
         STK = PRI;
+        if (STK < HEA || STK > STP)
+          return error::stack_error;
         break;
       case 5:
         FRM = PRI;
@@ -854,12 +863,16 @@ namespace amx
       OPERAND();
       STK += operand;
       ALT = STK;
+      if (STK < HEA || STK > STP)
+        return error::stack_error;
       break;
 
     case OP_HEAP:
       OPERAND();
       ALT = HEA;
       HEA += operand;
+      if (HEA > STK)
+        return error::heap_error;
       break;
 
     case OP_PROC:

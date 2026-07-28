@@ -111,6 +111,99 @@ TEST_PAWN(Packed, amx::error::success, 1);
 TEST_PAWN(GotoStackFixup, amx::error::success, 4105);
 TEST_PAWN(Bounds, amx::error::success, 6);
 
+namespace raw
+{
+  using raw_amx = amx::amx<uint32_t, amx::memory_manager_neumann<amx::memory_backing_paged_buffers<5>>>;
+  using rcell = raw_amx::cell;
+
+  enum : rcell
+  {
+    op_lodb_i = 8,
+    op_const_pri = 9,
+    op_const_alt = 10,
+    op_strb_i = 17,
+    op_sctrl = 20,
+    op_stack = 28,
+    op_heap = 29,
+    op_proc = 30,
+    op_retn = 32,
+    op_shl = 37,
+    op_shr = 38,
+    op_sshr = 39,
+    op_smul = 42,
+    op_sdiv = 43,
+    op_neg = 50,
+    op_movs = 64,
+    op_cmps = 65,
+    op_fill = 66,
+    op_halt = 67
+  };
+
+  static amx::error callback(raw_amx*, void*, rcell, rcell, rcell&)
+  {
+    return amx::error::success;
+  }
+
+  static amx::error run(
+    std::initializer_list<rcell> code_init,
+    rcell& pri,
+    std::vector<rcell>* data_out = nullptr,
+    rcell hea = 0,
+    size_t data_cells = 64
+  )
+  {
+    raw_amx vm{ &callback, nullptr };
+    std::vector<rcell> code{ code_init };
+    std::vector<rcell> data(data_cells);
+    if (data_out && !data_out->empty())
+      std::copy(data_out->begin(), data_out->end(), data.begin());
+    rcell code_base{}, data_base{};
+    if (!vm.mem.code().map(code.data(), code.size(), code_base))
+      return amx::error::access_violation_code;
+    if (!vm.mem.data().map(data.data(), data.size(), data_base))
+      return amx::error::access_violation;
+    vm.COD = code_base;
+    vm.DAT = data_base;
+    vm.STP = vm.STK = (rcell)(data_cells * sizeof(rcell));
+    vm.HEA = hea;
+    const auto result = vm.call((rcell)sizeof(rcell), pri);
+    if (data_out)
+      *data_out = data;
+    return result;
+  }
+}
+
+TEST(RawAmx, Sanity)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 7, raw::op_retn }, pri), amx::error::success);
+  EXPECT_EQ(pri, 7u);
+}
+
+TEST(RawAmx, HeapGrowsOverStack)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_heap, 1000, raw::op_retn }, pri), amx::error::heap_error);
+}
+
+TEST(RawAmx, StackGrowsIntoHeap)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_stack, (raw::rcell)-48, raw::op_retn }, pri, nullptr, 200), amx::error::stack_error);
+}
+
+TEST(RawAmx, PushIntoHeapFails)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_retn }, pri, nullptr, 248), amx::error::stack_error);
+}
+
+TEST(RawAmx, SctrlChecksHeapBounds)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 0x10000, raw::op_sctrl, 2, raw::op_retn }, pri), amx::error::heap_error);
+}
+
 TEST(PagedBacking, MapUsesRunStart)
 {
   using backing = amx::memory_backing_paged_buffers<5>::type<uint16_t>;
