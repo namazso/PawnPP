@@ -467,6 +467,29 @@ TEST(LoaderValidation, PublicNameOffsetPastFile)
   EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
 }
 
+TEST(LoaderValidation, RejectsNonCoreOpcodes)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  const auto cod = raw::get32(file, 12);
+  raw::patch32(file, cod, 112);
+  EXPECT_EQ(raw::load(file), amx::loader_error::feature_not_supported);
+  raw::patch32(file, cod, 75);
+  EXPECT_EQ(raw::load(file), amx::loader_error::feature_not_supported);
+  raw::patch32(file, cod, 200);
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
+TEST(LoaderValidation, RejectsTruncatedCasetbl)
+{
+  auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  const auto cod = raw::get32(file, 12);
+  raw::patch32(file, cod, 74);
+  raw::patch32(file, cod + 4, 0x40000000u);
+  EXPECT_EQ(raw::load(file), amx::loader_error::invalid_file);
+}
+
 TEST(LoaderValidation, DeclaredSizeTooSmall)
 {
   auto file = readall("test32.amx");

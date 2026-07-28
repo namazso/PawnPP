@@ -174,6 +174,49 @@ namespace amx
       return ((loader*)user_data)->amx_callback(index, stk, pri);
     }
 
+    static loader_error check_code_is_core(const std::vector<cell>& code)
+    {
+      constexpr static uint8_t operand_counts[]{
+        0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1,
+        0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0,
+        0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        1, 1, 1, 1, 1, 1, 1, 0, 0, 0
+      };
+      constexpr static cell op_casetbl = 74;
+      constexpr static cell op_last_defined = 174;
+
+      size_t i = 0;
+      while (i < code.size())
+      {
+        const auto opcode = code[i];
+        if (opcode == op_casetbl)
+        {
+          if (code.size() - i < 3)
+            return loader_error::invalid_file;
+          const auto records = code[i + 1];
+          if ((uint64_t)records > (uint64_t)((code.size() - i - 3) / 2))
+            return loader_error::invalid_file;
+          i += 3 + 2 * (size_t)records;
+        }
+        else if (opcode < sizeof(operand_counts))
+        {
+          i += 1 + operand_counts[(size_t)opcode];
+        }
+        else if (opcode <= op_last_defined)
+        {
+          return loader_error::feature_not_supported;
+        }
+        else
+        {
+          return loader_error::invalid_file;
+        }
+      }
+      if (i != code.size())
+        return loader_error::invalid_file;
+      return loader_error::success;
+    }
+
   public:
     loader_error init(const uint8_t* buf, size_t buf_size, const callbacks_arg& callbacks)
     {
@@ -253,6 +296,10 @@ namespace amx
       );
       if (!success)
         return loader_error::invalid_file;
+
+      const auto code_check = check_code_is_core(code);
+      if (code_check != loader_error::success)
+        return code_check;
 
       std::vector<cell> data;
       success = iter_valarray(
