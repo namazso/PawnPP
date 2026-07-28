@@ -242,6 +242,57 @@ TEST(RawAmx, SctrlChecksHeapBounds)
   EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 0x10000, raw::op_sctrl, 2, raw::op_retn }, pri), amx::error::heap_error);
 }
 
+TEST(RawAmx, ShlByCellWidth)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 1, raw::op_const_alt, 32, raw::op_shl, raw::op_retn }, pri), amx::error::success);
+  EXPECT_EQ(pri, 0u);
+}
+
+TEST(RawAmx, ShrByCellWidth)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 0x80000000u, raw::op_const_alt, 40, raw::op_shr, raw::op_retn }, pri), amx::error::success);
+  EXPECT_EQ(pri, 0u);
+}
+
+TEST(RawAmx, SshrByCellWidth)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 0x80000000u, raw::op_const_alt, 32, raw::op_sshr, raw::op_retn }, pri), amx::error::success);
+  EXPECT_EQ(pri, 0xFFFFFFFFu);
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 0x40000000u, raw::op_const_alt, 99, raw::op_sshr, raw::op_retn }, pri), amx::error::success);
+  EXPECT_EQ(pri, 0u);
+}
+
+TEST(RawAmx, SmulOverflowWraps)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 0x7FFFFFFFu, raw::op_const_alt, 3, raw::op_smul, raw::op_retn }, pri), amx::error::success);
+  EXPECT_EQ(pri, 0x7FFFFFFDu);
+}
+
+TEST(RawAmx, NegMostNegative)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 0x80000000u, raw::op_neg, raw::op_retn }, pri), amx::error::success);
+  EXPECT_EQ(pri, 0x80000000u);
+}
+
+TEST(RawAmx, SdivMinByMinusOne)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 0xFFFFFFFFu, raw::op_const_alt, 0x80000000u, raw::op_sdiv, raw::op_retn }, pri), amx::error::success);
+  EXPECT_EQ(pri, 0x80000000u);
+}
+
+TEST(RawAmx, SdivFloors)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 2, raw::op_const_alt, (raw::rcell)-7, raw::op_sdiv, raw::op_retn }, pri), amx::error::success);
+  EXPECT_EQ(pri, (raw::rcell)-4);
+}
+
 TEST(LoaderValidation, Baseline)
 {
   const auto file = readall("test32.amx");

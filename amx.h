@@ -916,35 +916,44 @@ namespace amx
       break;
 
     case OP_SHL:
-      PRI <<= ALT;
+      PRI = (cell)(ALT >= (cell)cell_bits ? 0 : PRI << ALT);
       break;
 
     case OP_SHR:
-      PRI >>= ALT;
+      PRI = (cell)(ALT >= (cell)cell_bits ? 0 : PRI >> ALT);
       break;
 
     case OP_SSHR:
-      PRI = (cell)((scell)PRI >> ALT); // not implementation defined since C++20.
+      if (ALT >= (cell)cell_bits)
+        PRI = (scell)PRI < 0 ? (cell)~(cell)0 : (cell)0;
+      else
+        PRI = (cell)((scell)PRI >> ALT); // not implementation defined since C++20.
       break;
 
     case OP_SHL_C_PRI:
       OPERAND();
-      PRI <<= operand;
+      PRI = (cell)(operand >= (cell)cell_bits ? 0 : PRI << operand);
       break;
 
     case OP_SHL_C_ALT:
       OPERAND();
-      ALT <<= operand;
+      ALT = (cell)(operand >= (cell)cell_bits ? 0 : ALT << operand);
       break;
 
     case OP_SMUL:
-      PRI = (cell)((scell)PRI * (scell)ALT);
+      PRI = (cell)((ulonger)PRI * (ulonger)ALT);
       break;
 
     case OP_SDIV:
       if (PRI == 0)
         return error::division_with_zero;
       operand = PRI;
+      if (operand == (cell)~(cell)0)
+      {
+        PRI = (cell)(0 - ALT);
+        ALT = 0;
+        break;
+      }
       PRI = (cell)((scell)ALT / (scell)operand);
       ALT = (cell)((scell)ALT % (scell)operand);
       if (ALT != 0 && (scell)(ALT ^ operand) < 0) {
@@ -978,7 +987,7 @@ namespace amx
       break;
 
     case OP_NEG:
-      PRI = (cell)-(scell)PRI;
+      PRI = (cell)(0 - PRI);
       break;
 
     case OP_INVERT:
