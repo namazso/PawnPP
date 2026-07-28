@@ -293,6 +293,97 @@ TEST(RawAmx, SdivFloors)
   EXPECT_EQ(pri, (raw::rcell)-4);
 }
 
+TEST(RawAmx, MovsCopiesSingleByte)
+{
+  raw::rcell pri{};
+  std::vector<raw::rcell> data{ 0x11223344u, 0xAABBCCDDu };
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 0, raw::op_const_alt, 4, raw::op_movs, 1, raw::op_retn }, pri, &data), amx::error::success);
+  EXPECT_EQ(data[0], 0x11223344u);
+  EXPECT_EQ(data[1], 0xAABBCC44u);
+}
+
+TEST(RawAmx, MovsCopiesMisalignedBytes)
+{
+  raw::rcell pri{};
+  std::vector<raw::rcell> data{ 0x44332211u, 0 };
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 1, raw::op_const_alt, 5, raw::op_movs, 2, raw::op_retn }, pri, &data), amx::error::success);
+  EXPECT_EQ(data[1], 0x00332200u);
+}
+
+TEST(RawAmx, CmpsEqualBlocksAtNonzeroAddresses)
+{
+  raw::rcell pri{};
+  std::vector<raw::rcell> data{ 0, 0, 0x12345678u, 0x9ABCDEF0u, 0x12345678u, 0x9ABCDEF0u };
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 8, raw::op_const_alt, 16, raw::op_cmps, 8, raw::op_retn }, pri, &data), amx::error::success);
+  EXPECT_EQ(pri, 0u);
+}
+
+TEST(RawAmx, CmpsFindsMismatch)
+{
+  raw::rcell pri{};
+  std::vector<raw::rcell> data{ 0, 0, 0x12345678u, 0x9ABCDEF0u, 0x12345678u, 0x9ABCDEF1u };
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 8, raw::op_const_alt, 16, raw::op_cmps, 8, raw::op_retn }, pri, &data), amx::error::success);
+  EXPECT_NE(pri, 0u);
+}
+
+TEST(RawAmx, LodbReadsAcrossCells)
+{
+  raw::rcell pri{};
+  std::vector<raw::rcell> data{ 0x11223344u, 0x55667788u };
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 2, raw::op_lodb_i, 4, raw::op_retn }, pri, &data), amx::error::success);
+  EXPECT_EQ(pri, 0x77881122u);
+}
+
+TEST(RawAmx, LodbInvalidWidthLeavesPri)
+{
+  raw::rcell pri{};
+  std::vector<raw::rcell> data{ 0x11223344u };
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 8, raw::op_lodb_i, 3, raw::op_retn }, pri, &data), amx::error::success);
+  EXPECT_EQ(pri, 8u);
+}
+
+TEST(RawAmx, StrbWritesAcrossCells)
+{
+  raw::rcell pri{};
+  std::vector<raw::rcell> data{ 0, 0 };
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_alt, 3, raw::op_const_pri, 0xABCDu, raw::op_strb_i, 2, raw::op_retn }, pri, &data), amx::error::success);
+  EXPECT_EQ(data[0], 0xCD000000u);
+  EXPECT_EQ(data[1], 0x000000ABu);
+}
+
+TEST(RawAmx, StrbInvalidWidthWritesNothing)
+{
+  raw::rcell pri{};
+  std::vector<raw::rcell> data{ 0x12121212u };
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_alt, 0, raw::op_const_pri, 0x11111111u, raw::op_strb_i, 3, raw::op_retn }, pri, &data), amx::error::success);
+  EXPECT_EQ(data[0], 0x12121212u);
+}
+
+TEST(RawAmx, FillRequiresCellMultiple)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_alt, 0, raw::op_const_pri, 7, raw::op_fill, 6, raw::op_retn }, pri), amx::error::invalid_operand);
+}
+
+TEST(RawAmx, HaltPreservesExitValue)
+{
+  raw::rcell pri{};
+  EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 42, raw::op_halt, 0, raw::op_retn }, pri), amx::error::halt);
+  EXPECT_EQ(pri, 42u);
+}
+
+TEST(LoaderValidation, StpOnePastEnd)
+{
+  const auto file = readall("test32.amx");
+  ASSERT_FALSE(file.empty());
+  const auto ldr = std::make_unique<raw::raw_loader>();
+  ASSERT_EQ(ldr->init(file.data(), file.size(), raw::CALLBACKS), amx::loader_error::success);
+  const auto dat = raw::get32(file, 16);
+  const auto stp = raw::get32(file, 24);
+  EXPECT_EQ(ldr->amx.STP, stp - dat);
+  EXPECT_EQ(ldr->amx.STK, stp - dat);
+}
+
 TEST(LoaderValidation, Baseline)
 {
   const auto file = readall("test32.amx");

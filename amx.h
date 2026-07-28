@@ -676,29 +676,18 @@ namespace amx
 
     case OP_LODB_I:
       OPERAND();
+      if ((operand == 1 || operand == 2 || operand == 4) && operand <= (cell)cell_bytes)
       {
-        constexpr static auto subcell_mask = (cell)misalign_mask;
-        const auto aligned = (cell)(PRI & ~subcell_mask);
-        const auto subcell_bits = (cell)((PRI & subcell_mask) * 8);
-        if (aligned != ((PRI + operand - 1) & ~subcell_mask))
-          return error::invalid_operand; // access spans across cells
-        DATA(aligned);
-        switch (operand)
+        cell value{};
+        for (cell i = 0; i < operand; ++i)
         {
-        case 1:
-          PRI = (RESULT() >> subcell_bits) & 0xFF;
-          break;
-        case 2:
-          PRI = (RESULT() >> subcell_bits) & 0xFFFF;
-          break;
-        case 4:
-          PRI = (RESULT() >> subcell_bits) & 0xFFFFFFFF;
-          break;
-        default:
-          return error::invalid_operand;
+          const auto address = (cell)(PRI + i);
+          DATA((cell)(address & ~(cell)misalign_mask));
+          value |= (cell)(((RESULT() >> ((address & (cell)misalign_mask) * 8)) & 0xFF) << (i * 8));
         }
-        break;
+        PRI = value;
       }
+      break;
 
     case OP_CONST_PRI:
       OPERAND();
@@ -744,29 +733,17 @@ namespace amx
 
     case OP_STRB_I:
       OPERAND();
+      if ((operand == 1 || operand == 2 || operand == 4) && operand <= (cell)cell_bytes)
       {
-        constexpr static auto subcell_mask = (cell)misalign_mask;
-        const auto aligned = (cell)(ALT & ~subcell_mask);
-        const auto subcell_bits = (cell)((ALT & subcell_mask) * 8);
-        if (aligned != ((ALT + operand - 1) & ~subcell_mask))
-          return error::invalid_operand; // access spans across cells
-        DATA(aligned);
-        switch (operand)
+        for (cell i = 0; i < operand; ++i)
         {
-        case 1:
-          RESULT() = (cell)((RESULT() & ~((cell)0xFF << subcell_bits)) | ((PRI & 0xFF) << subcell_bits));
-          break;
-        case 2:
-          RESULT() = (cell)((RESULT() & ~((cell)0xFFFF << subcell_bits)) | ((PRI & 0xFFFF) << subcell_bits));
-          break;
-        case 4:
-          RESULT() = (cell)((RESULT() & ~((cell)0xFFFFFFFF << subcell_bits)) | ((PRI & 0xFFFFFFFF) << subcell_bits));
-          break;
-        default:
-          return error::invalid_operand;
+          const auto address = (cell)(ALT + i);
+          DATA((cell)(address & ~(cell)misalign_mask));
+          const auto shift = (cell)((address & (cell)misalign_mask) * 8);
+          RESULT() = (cell)((RESULT() & ~((cell)0xFF << shift)) | (((PRI >> (i * 8)) & 0xFF) << shift));
         }
-        break;
       }
+      break;
 
     case OP_ALIGN_PRI:
       OPERAND();
@@ -1044,29 +1021,39 @@ namespace amx
 
     case OP_MOVS:
       OPERAND();
-      for (cell i = 0; i < operand; i += cell_bytes)
+      for (cell i = 0; i < operand; ++i)
       {
-        DATA(PRI + i);
-        cell tmp = RESULT();
-        DATA(ALT + i);
-        RESULT() = tmp;
+        const auto src = (cell)(PRI + i);
+        DATA((cell)(src & ~(cell)misalign_mask));
+        const auto value = (cell)((RESULT() >> ((src & (cell)misalign_mask) * 8)) & 0xFF);
+        const auto dst = (cell)(ALT + i);
+        DATA((cell)(dst & ~(cell)misalign_mask));
+        const auto shift = (cell)((dst & (cell)misalign_mask) * 8);
+        RESULT() = (cell)((RESULT() & ~((cell)0xFF << shift)) | (value << shift));
       }
       break;
 
     case OP_CMPS:
       OPERAND();
-      PRI = 0;
-      for (cell i = 0; PRI == 0 && i < operand; i += cell_bytes)
       {
-        DATA(PRI + i);
-        cell tmp = RESULT();
-        DATA(ALT + i);
-        PRI = RESULT() - tmp;
+        cell diff = 0;
+        for (cell i = 0; diff == 0 && i < operand; ++i)
+        {
+          const auto lhs = (cell)(PRI + i);
+          DATA((cell)(lhs & ~(cell)misalign_mask));
+          const auto lhs_value = (cell)((RESULT() >> ((lhs & (cell)misalign_mask) * 8)) & 0xFF);
+          const auto rhs = (cell)(ALT + i);
+          DATA((cell)(rhs & ~(cell)misalign_mask));
+          diff = (cell)(lhs_value - ((RESULT() >> ((rhs & (cell)misalign_mask) * 8)) & 0xFF));
+        }
+        PRI = diff;
+        break;
       }
-      break;
 
     case OP_FILL:
       OPERAND();
+      if (operand % cell_bytes != 0)
+        return error::invalid_operand;
       for (cell i = 0; i < operand; i += cell_bytes)
       {
         DATA(ALT + i);
@@ -1076,7 +1063,6 @@ namespace amx
 
     case OP_HALT:
       OPERAND();
-      PRI = operand;
       return error::halt;
 
     case OP_BOUNDS:

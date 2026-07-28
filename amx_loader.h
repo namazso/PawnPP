@@ -400,7 +400,7 @@ namespace amx
       amx.COD = code_base;
       amx.DAT = data_base;
 
-      amx.STK = amx.STP = (cell)((_data.size() - 1) * sizeof(cell));
+      amx.STK = amx.STP = (cell)(_data.size() * sizeof(cell));
       amx.HEA = (cell)(data_oldsize * sizeof(cell));
 
       return loader_error::success;
