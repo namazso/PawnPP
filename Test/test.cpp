@@ -415,6 +415,23 @@ TEST(RawAmx, HaltPreservesExitValue)
   EXPECT_EQ(pri, 42u);
 }
 
+TEST(RawAmx, FailedCallRestoresStack)
+{
+  raw::raw_amx vm{ &raw::callback, nullptr };
+  std::vector<raw::rcell> code{ raw::op_halt, raw::op_proc, raw::op_retn };
+  std::vector<raw::rcell> data(64);
+  raw::rcell code_base{}, data_base{};
+  ASSERT_TRUE(vm.mem.code().map(code.data(), code.size(), code_base));
+  ASSERT_TRUE(vm.mem.data().map(data.data(), data.size(), data_base));
+  vm.COD = code_base;
+  vm.DAT = data_base;
+  vm.STP = vm.STK = (raw::rcell)(data.size() * sizeof(raw::rcell));
+  vm.HEA = vm.STK - 8;
+  raw::rcell pri{};
+  EXPECT_EQ(vm.call(4, pri, { 1, 2, 3 }), amx::error::stack_error);
+  EXPECT_EQ(vm.STK, vm.STP);
+}
+
 TEST(RawAmx, NullCallbackIsSafe)
 {
   raw::raw_amx vm{};

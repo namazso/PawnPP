@@ -467,19 +467,26 @@ namespace amx
   public:
     error call(cell cip, cell& pri, std::initializer_list<cell> args = {})
     {
+      const auto stk = STK;
       cell size{};
       for (auto it = std::crbegin(args); it != std::crend(args); ++it)
       {
         const auto arg = *it;
         const auto result = push(arg);
         if (result != error::success)
+        {
+          STK = stk;
           return result;
+        }
         size += cell_bytes;
       }
 
       const auto result = push(size);
       if (result != error::success)
+      {
+        STK = stk;
         return result;
+      }
 
       return call_raw(cip, pri);
     }
