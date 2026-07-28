@@ -57,7 +57,8 @@ protected:
   
   void SetUp() override {
     const auto file = readall(("test" + std::to_string(std::numeric_limits<T>::digits) + ".amx").c_str());
-    _ldr.init(file.data(), file.size(), CALLBACKS);
+    ASSERT_FALSE(file.empty());
+    ASSERT_EQ(_ldr.init(file.data(), file.size(), CALLBACKS), amx::loader_error::success);
   }
 };
 
@@ -198,7 +199,8 @@ namespace raw
     op_movs = 64,
     op_cmps = 65,
     op_fill = 66,
-    op_halt = 67
+    op_halt = 67,
+    op_sysreq = 69
   };
 
   static amx::error callback(raw_amx*, void*, rcell, rcell, rcell&)
@@ -394,6 +396,37 @@ TEST(RawAmx, HaltPreservesExitValue)
   raw::rcell pri{};
   EXPECT_EQ(raw::run({ raw::op_halt, raw::op_proc, raw::op_const_pri, 42, raw::op_halt, 0, raw::op_retn }, pri), amx::error::halt);
   EXPECT_EQ(pri, 42u);
+}
+
+TEST(RawAmx, NullCallbackIsSafe)
+{
+  raw::raw_amx vm{};
+  std::vector<raw::rcell> code{ raw::op_halt, raw::op_proc, raw::op_const_pri, 3, raw::op_retn };
+  std::vector<raw::rcell> data(64);
+  raw::rcell code_base{}, data_base{};
+  ASSERT_TRUE(vm.mem.code().map(code.data(), code.size(), code_base));
+  ASSERT_TRUE(vm.mem.data().map(data.data(), data.size(), data_base));
+  vm.COD = code_base;
+  vm.DAT = data_base;
+  vm.STP = vm.STK = (raw::rcell)(data.size() * sizeof(raw::rcell));
+  raw::rcell pri{};
+  EXPECT_EQ(vm.call(4, pri), amx::error::success);
+  EXPECT_EQ(pri, 3u);
+}
+
+TEST(RawAmx, NullCallbackSysreqAborts)
+{
+  raw::raw_amx vm{};
+  std::vector<raw::rcell> code{ raw::op_halt, raw::op_proc, raw::op_sysreq, 0, raw::op_retn };
+  std::vector<raw::rcell> data(64);
+  raw::rcell code_base{}, data_base{};
+  ASSERT_TRUE(vm.mem.code().map(code.data(), code.size(), code_base));
+  ASSERT_TRUE(vm.mem.data().map(data.data(), data.size(), data_base));
+  vm.COD = code_base;
+  vm.DAT = data_base;
+  vm.STP = vm.STK = (raw::rcell)(data.size() * sizeof(raw::rcell));
+  raw::rcell pri{};
+  EXPECT_EQ(vm.call(4, pri), amx::error::callback_abort);
 }
 
 TEST(LoaderValidation, StpOnePastEnd)

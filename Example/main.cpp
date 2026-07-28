@@ -29,7 +29,7 @@
 #include "../amx.h"
 #include "../amx_loader.h"
 
-using amx32 = amx::amx<uint64_t, amx::memory_manager_neumann<amx::memory_backing_paged_buffers<5>>>;
+using amx32 = amx::amx<uint32_t, amx::memory_manager_neumann<amx::memory_backing_paged_buffers<5>>>;
 using amx32_loader = amx::loader<amx32>;
 
 static amx::error five(amx32* amx, amx32_loader* loader, void* user, amx32::cell argc, amx32::cell argv, amx32::cell& retval)

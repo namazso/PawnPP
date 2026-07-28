@@ -4,6 +4,7 @@
 #pragma once
 #include <cstdint>
 #include <cassert>
+#include <iterator>
 #include <limits>
 #include <type_traits>
 #include <cstddef>
@@ -398,6 +399,8 @@ namespace amx
 
     error fire_callback(cell index)
     {
+      if (!_callback)
+        return index == cbid_single_step || index == cbid_break ? error::success : error::callback_abort;
       // callback shouldnt modify these after return
       const auto alt = ALT;
       const auto frm = FRM;
