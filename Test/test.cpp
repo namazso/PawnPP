@@ -692,6 +692,17 @@ TEST(PagedBacking, MapRejectsOversize)
   EXPECT_FALSE(b->map(buf.data(), 65535, va));
 }
 
+TEST(ContiguousBackingDeathTest, UnmapMismatchAborts)
+{
+  using backing = amx::memory_backing_contignous_buffer::type<uint32_t>;
+  backing b{};
+  uint32_t buf[4]{};
+  uint32_t va{};
+  ASSERT_TRUE(b.map(buf, 4, va));
+  EXPECT_DEATH(b.unmap(4, 4), "");
+  EXPECT_DEATH(b.unmap(0, 2), "");
+}
+
 TEST(ContiguousBacking, RejectsMisalignedAddresses)
 {
   using backing = amx::memory_backing_contignous_buffer::type<uint32_t>;

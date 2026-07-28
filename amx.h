@@ -4,12 +4,17 @@
 #pragma once
 #include <cstdint>
 #include <cassert>
+#include <cstdlib>
 #include <iterator>
 #include <limits>
 #include <type_traits>
 #include <cstddef>
 #include <initializer_list>
+#ifdef NDEBUG
+#define AMX_ASSERT(cond) ((cond) ? (void)0 : std::abort())
+#else
 #define AMX_ASSERT(cond) assert(cond)
+#endif
 
 namespace amx
 {
