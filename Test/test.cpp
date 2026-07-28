@@ -673,6 +673,23 @@ TEST(ContiguousBacking, RejectsMisalignedAddresses)
   EXPECT_EQ(b.translate(16), nullptr);
 }
 
+TEST(PartialAddressBacking, Works16Bit)
+{
+  using backing = amx::memory_backing_partial_address_space<8>::type<uint16_t>;
+  backing b{};
+  constexpr size_t window_bytes = 0x100;
+  std::vector<uint16_t> storage(window_bytes / sizeof(uint16_t) * 2);
+  const auto base = (uint16_t*)(((uintptr_t)storage.data() + window_bytes - 1) & ~(uintptr_t)(window_bytes - 1));
+  uint16_t va{};
+  ASSERT_TRUE(b.map(base, window_bytes / sizeof(uint16_t), va));
+  EXPECT_EQ(va, 0u);
+  EXPECT_EQ(b.translate(0), base);
+  EXPECT_EQ(b.translate(2), base + 1);
+  EXPECT_EQ(b.translate(1), nullptr);
+  base[1] = 0xBEEF;
+  EXPECT_EQ(*b.translate(2), 0xBEEFu);
+}
+
 TEST(PartialAddressBacking, TranslatesToHostPointers)
 {
   using backing = amx::memory_backing_partial_address_space<16>::type<uint32_t>;

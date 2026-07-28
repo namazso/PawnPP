@@ -249,7 +249,7 @@ namespace amx
 
       constexpr static size_t valid_bits = ValidBits;
       constexpr static size_t invalid_bits = cell_bits - valid_bits;
-      constexpr static cell offset_mask = (((~(cell)0) << invalid_bits) >> invalid_bits);
+      constexpr static cell offset_mask = (cell)((cell)~(cell)0 >> invalid_bits);
       constexpr static cell offset_mask_align = offset_mask & ~(cell)misalign_mask;
 
       uintptr_t _backing_bits{};
