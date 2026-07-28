@@ -10,10 +10,12 @@
 #include <type_traits>
 #include <cstddef>
 #include <initializer_list>
+#ifndef AMX_ASSERT
 #ifdef NDEBUG
 #define AMX_ASSERT(cond) ((cond) ? (void)0 : std::abort())
 #else
 #define AMX_ASSERT(cond) assert(cond)
+#endif
 #endif
 
 namespace amx
