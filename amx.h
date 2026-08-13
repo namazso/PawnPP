@@ -474,27 +474,33 @@ namespace amx
     error call(cell cip, cell& pri, std::initializer_list<cell> args = {})
     {
       const auto stk = STK;
+      const auto frm = FRM;
+      const auto hea = HEA;
+
+      auto result = error::success;
       cell size{};
       for (auto it = std::crbegin(args); it != std::crend(args); ++it)
       {
-        const auto arg = *it;
-        const auto result = push(arg);
+        result = push(*it);
         if (result != error::success)
-        {
-          STK = stk;
-          return result;
-        }
+          break;
         size += cell_bytes;
       }
 
-      const auto result = push(size);
+      if (result == error::success)
+        result = push(size);
+
+      if (result == error::success)
+        result = call_raw(cip, pri);
+
       if (result != error::success)
       {
         STK = stk;
-        return result;
+        FRM = frm;
+        HEA = hea;
       }
 
-      return call_raw(cip, pri);
+      return result;
     }
 
     amx(
