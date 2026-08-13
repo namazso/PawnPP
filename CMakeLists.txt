@@ -4,7 +4,7 @@ project(PawnPP CXX)
 
 add_library(pawnpp INTERFACE)
 target_include_directories(pawnpp INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_features(pawnpp INTERFACE cxx_std_17)
+target_compile_features(pawnpp INTERFACE cxx_std_20)
 
 option(PAWNPP_BUILD_EXAMPLE "Build the PawnPP example" ${PROJECT_IS_TOP_LEVEL})
 option(PAWNPP_BUILD_TESTS "Build the PawnPP tests" ${PROJECT_IS_TOP_LEVEL})
